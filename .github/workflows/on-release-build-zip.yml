@@ -1,0 +1,33 @@
+name: On Release, Build release zip
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: Build release zip
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ github.event.release.tag_name }}
+          persist-credentials: false
+
+      - name: Stage release files
+        run: |
+          mkdir -p "$RUNNER_TEMP/network-ai-connector"
+          rsync -a --exclude='.git/' --exclude-from='.distignore' . "$RUNNER_TEMP/network-ai-connector/"
+
+      - name: Archive release
+        working-directory: ${{ runner.temp }}
+        run: zip -r "$GITHUB_WORKSPACE/network-ai-connector.zip" network-ai-connector/
+
+      - name: Upload zip to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload --clobber -- "$RELEASE_TAG" network-ai-connector.zip

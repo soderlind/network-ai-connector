@@ -1,0 +1,46 @@
+name: Manually Build release zip
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to deploy'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build release zip
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+
+      - name: Stage release files
+        run: |
+          mkdir -p "$RUNNER_TEMP/network-ai-connector"
+          rsync -a --exclude='.git/' --exclude-from='.distignore' . "$RUNNER_TEMP/network-ai-connector/"
+
+      - name: Archive release
+        working-directory: ${{ runner.temp }}
+        run: zip -r "$GITHUB_WORKSPACE/network-ai-connector.zip" network-ai-connector/
+
+      - name: Upload zip to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          tag_path=$(jq -rn --arg tag "$RELEASE_TAG" '$tag | @uri')
+          if response=$(gh api --include "repos/$GITHUB_REPOSITORY/releases/tags/$tag_path" 2>&1); then
+            gh release upload --clobber -- "$RELEASE_TAG" network-ai-connector.zip
+          elif printf '%s\n' "$response" | grep -Eq '^HTTP/[0-9.]+ 404([[:space:]]|$)'; then
+            gh release create --verify-tag --title "$RELEASE_TAG" --generate-notes -- "$RELEASE_TAG" network-ai-connector.zip
+          else
+            printf '%s\n' "$response" >&2
+            exit 1
+          fi
