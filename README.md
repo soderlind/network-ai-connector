@@ -98,6 +98,8 @@ See the [design](docs/design.md) and [glossary](GLOSSARY.md) for more detail.
 
 ### Release ZIP
 
+Download the latest [Network AI Connector ZIP](https://github.com/soderlind/network-ai-connector/releases/latest/download/network-ai-connector.zip).
+
 Publishing a GitHub release builds and attaches `network-ai-connector.zip`. To build one manually, run **Manually Build release zip** from GitHub Actions with an existing tag. The workflow uploads the ZIP to that tag's release, creating the release if needed. Both workflows replace any existing asset with the same name.
 
 The ZIP contains a top-level `network-ai-connector` directory. Development files are excluded according to [`.distignore`](.distignore).
