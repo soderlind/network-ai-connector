@@ -204,7 +204,7 @@ final class Admin {
 		$status     = $this->requested_status();
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only provider ID, checked against registered connectors.
 		$provider = isset( $_GET['nac_provider'] ) && is_string( $_GET['nac_provider'] ) ? sanitize_key( wp_unslash( $_GET['nac_provider'] ) ) : '';
-		$reopen   = in_array( $status, array( 'invalid_key', 'invalid_configuration', 'confirm_remove', 'provider_inactive', 'validation_failed', 'storage_failed', 'installed', 'activated' ), true ) && isset( $connectors[ $provider ] ) ? $provider : '';
+		$reopen   = in_array( $status, array( 'invalid_key', 'invalid_configuration', 'confirm_remove', 'provider_inactive', 'validation_failed', 'validation_in_progress', 'storage_failed', 'installed', 'activated' ), true ) && isset( $connectors[ $provider ] ) ? $provider : '';
 		ksort( $connectors );
 		?>
 		<div class="nac-page">
@@ -514,21 +514,22 @@ final class Admin {
 	private function notice( string $status, string $name ): void {
 		$messages = array(
 			/* translators: %s: Connector name. */
-			'installed'             => sprintf( __( 'Plugin for %s installed and network-activated successfully.', 'network-ai-connector' ), $name ),
+			'installed'              => sprintf( __( 'Plugin for %s installed and network-activated successfully.', 'network-ai-connector' ), $name ),
 			/* translators: %s: Connector name. */
-			'activated'             => sprintf( __( 'Plugin for %s network-activated successfully.', 'network-ai-connector' ), $name ),
+			'activated'              => sprintf( __( 'Plugin for %s network-activated successfully.', 'network-ai-connector' ), $name ),
 			/* translators: %s: Connector name. */
-			'install_failed'        => sprintf( __( 'Failed to install plugin for %s.', 'network-ai-connector' ), $name ),
+			'install_failed'         => sprintf( __( 'Failed to install plugin for %s.', 'network-ai-connector' ), $name ),
 			/* translators: %s: Connector name. */
-			'activate_failed'       => sprintf( __( 'Failed to network-activate plugin for %s.', 'network-ai-connector' ), $name ),
-			'saved'                 => __( 'Network connection validated and saved.', 'network-ai-connector' ),
-			'removed'               => __( 'Network connection removed. This provider is now unavailable across the network.', 'network-ai-connector' ),
-			'invalid_key'           => __( 'Enter a non-empty API key without whitespace or control characters. The stored key has not changed.', 'network-ai-connector' ),
-			'confirm_remove'        => __( 'Confirm removal before removing the network key.', 'network-ai-connector' ),
-			'provider_inactive'     => __( 'Network-activate the provider plugin before validating its network connection.', 'network-ai-connector' ),
-			'validation_failed'     => __( 'The connection could not be validated. Check the key, provider configuration, and connectivity. The stored key has not changed.', 'network-ai-connector' ),
-			'storage_failed'        => __( 'The network key could not be saved. Please try again.', 'network-ai-connector' ),
-			'invalid_configuration' => __( 'Enter valid provider settings. URLs must use HTTP or HTTPS and must not contain credentials or fragments. The stored connection has not changed.', 'network-ai-connector' ),
+			'activate_failed'        => sprintf( __( 'Failed to network-activate plugin for %s.', 'network-ai-connector' ), $name ),
+			'saved'                  => __( 'Network connection validated and saved.', 'network-ai-connector' ),
+			'removed'                => __( 'Network connection removed. This provider is now unavailable across the network.', 'network-ai-connector' ),
+			'invalid_key'            => __( 'Enter a non-empty API key without whitespace or control characters. The stored key has not changed.', 'network-ai-connector' ),
+			'confirm_remove'         => __( 'Confirm removal before removing the network key.', 'network-ai-connector' ),
+			'provider_inactive'      => __( 'Network-activate the provider plugin before validating its network connection.', 'network-ai-connector' ),
+			'validation_failed'      => __( 'The connection could not be validated. Check the key, provider configuration, and connectivity. The stored key has not changed.', 'network-ai-connector' ),
+			'validation_in_progress' => __( 'Another network connection is already being validated. The stored connection has not changed.', 'network-ai-connector' ),
+			'storage_failed'         => __( 'The network key could not be saved. Please try again.', 'network-ai-connector' ),
+			'invalid_configuration'  => __( 'Enter valid provider settings. URLs must use HTTP or HTTPS and must not contain credentials or fragments. The stored connection has not changed.', 'network-ai-connector' ),
 		);
 		if ( isset( $messages[ $status ] ) ) {
 			wp_admin_notice( $messages[ $status ], array( 'type' => in_array( $status, array( 'saved', 'removed', 'installed', 'activated' ), true ) ? 'success' : 'error' ) );

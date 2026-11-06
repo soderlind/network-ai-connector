@@ -10,6 +10,7 @@ use Soderlind\Network_AI_Connector\Network_Authentication;
 use Soderlind\Network_AI_Connector\Plugin;
 use Soderlind\Network_AI_Connector\Provider_Settings;
 use WordPress\AiClient\AiClient;
+use WordPress\AiClient\Common\Contracts\CachesDataInterface;
 use WordPress\AiClient\Providers\ApiBasedImplementation\AbstractApiBasedModelMetadataDirectory;
 use WordPress\AiClient\Providers\ApiBasedImplementation\ListModelsApiBasedProviderAvailability;
 use WordPress\AiClient\Providers\Contracts\ModelMetadataDirectoryInterface;
@@ -80,7 +81,16 @@ final class AzureAuthentication extends \WordPress\AiClient\Providers\Http\DTO\A
 }
 
 final class ConfiguredDirectory extends AbstractApiBasedModelMetadataDirectory {
+	public int $invalidations_before_failure = 0;
+
 	public function __construct( private string $id ) {}
+
+	public function invalidateCaches(): void {
+		if ( $this->invalidations_before_failure > 0 && 0 === --$this->invalidations_before_failure ) {
+			throw new \Error( 'SYNTHETIC_SECRET_MARKER: cache invalidation failed.' );
+		}
+		parent::invalidateCaches();
+	}
 
 	protected function sendListModelsRequest(): array {
 		$request = $this->getRequestAuthentication()->authenticateRequest( new Request( HttpMethodEnum::get(), 'https://example.invalid/models' ) );
@@ -133,6 +143,45 @@ final class UnmanagedProvider extends ConfiguredProvider {
 	}
 }
 
+final class CacheOrderDirectory extends AbstractApiBasedModelMetadataDirectory {
+	public function invalidateCaches(): void {
+		$GLOBALS['nac_cache_order'][] = 'clear directory';
+		parent::invalidateCaches();
+	}
+
+	protected function sendListModelsRequest(): array {
+		return array();
+	}
+}
+
+final class CacheOrderAvailability extends ListModelsApiBasedProviderAvailability implements CachesDataInterface {
+	public function invalidateCaches(): void {
+		$GLOBALS['nac_cache_order'][] = 'clear availability';
+		if ( $GLOBALS['nac_fail_availability_cache'] ) {
+			throw new \Error( 'SYNTHETIC_SECRET_MARKER: availability cache failed.' );
+		}
+	}
+}
+
+final class CacheOrderProvider extends ConfiguredProvider {
+	protected const ID = 'nac-cache-order';
+
+	public static function availability(): ProviderAvailabilityInterface {
+		$GLOBALS['nac_cache_order'][] = 'get availability';
+		if ( $GLOBALS['nac_fail_availability_factory'] ) {
+			throw new \Error( 'SYNTHETIC_SECRET_MARKER: availability factory failed.' );
+		}
+		static $availability;
+		return $availability ??= new CacheOrderAvailability( self::modelMetadataDirectory() );
+	}
+
+	public static function modelMetadataDirectory(): ModelMetadataDirectoryInterface {
+		$GLOBALS['nac_cache_order'][] = 'get directory';
+		static $directory;
+		return $directory ??= new CacheOrderDirectory();
+	}
+}
+
 $GLOBALS['nac_test_assertions'] = 0;
 function expect( bool $condition, string $message ): void {
 	if ( ! $condition ) {
@@ -153,6 +202,8 @@ $original_post    = $_POST;
 $original_request = $_REQUEST;
 $original_method  = $_SERVER['REQUEST_METHOD'] ?? null;
 $original_env     = getenv( 'NAC_TEST_API_KEY' );
+$original_ollama_env = getenv( 'OLLAMA_HOST' );
+$deployment_ollama_host = 'http://deployment.example.invalid:11434';
 $prefix           = 'nac_test_' . wp_generate_password( 12, false );
 $site_option      = $prefix . '_local';
 $other_option     = $prefix . '_other';
@@ -285,6 +336,7 @@ try {
 	add_option( $extra_option, 'native-provider-setting' );
 	add_option( $sentinel_option, 'ready' );
 	putenv( 'NAC_TEST_API_KEY=valid-environment-key' );
+	putenv( 'OLLAMA_HOST=' . $deployment_ollama_host );
 	define( 'NAC_TEST_API_KEY', 'valid-constant-key' );
 	$ai_registry = AiClient::defaultRegistry();
 	$ai_registry->registerProvider( Provider::class );
@@ -351,6 +403,31 @@ try {
 		}
 	}
 	expect( $plugin instanceof Plugin, 'Network activation bootstraps enforcement before core key initialization' );
+	expect( 'http://localhost:11434' === getenv( 'OLLAMA_HOST' ), 'Enforcement initially overrides the deployment Ollama host' );
+	$enforced = false;
+	$invalid_network_settings = static fn(): string => 'invalid network settings';
+	$filter( 'pre_site_option_' . Plugin::CONFIG_OPTION, $invalid_network_settings );
+	try {
+		$plugin->apply_provider_configuration();
+	} finally {
+		remove_filter( 'pre_site_option_' . Plugin::CONFIG_OPTION, $invalid_network_settings );
+	}
+	expect( $deployment_ollama_host === getenv( 'OLLAMA_HOST' ), 'Leaving enforcement restores the deployment Ollama host even if network settings are invalid' );
+	putenv( 'OLLAMA_HOST' );
+	$enforced = true;
+	$plugin->apply_provider_configuration();
+	$enforced = false;
+	$plugin->apply_provider_configuration();
+	expect( false === getenv( 'OLLAMA_HOST' ), 'Leaving enforcement unsets an Ollama host that was originally absent' );
+	putenv( 'OLLAMA_HOST=' );
+	$enforced = true;
+	$plugin->apply_provider_configuration();
+	$enforced = false;
+	$plugin->apply_provider_configuration();
+	expect( '' === getenv( 'OLLAMA_HOST' ), 'Leaving enforcement preserves an originally empty Ollama host' );
+	putenv( 'OLLAMA_HOST=' . $deployment_ollama_host );
+	$enforced = true;
+	$plugin->apply_provider_configuration();
 	expect( isset( $plugin->connectors()[ $sentinel_id ] ), 'A normal API-key connector is not excluded without identifying metadata' );
 	define( 'AZURE_AI_FOUNDRY_AI_PLUGIN_SENTINEL_ID', $sentinel_id );
 	define( 'AZURE_AI_FOUNDRY_AI_PLUGIN_SENTINEL_OPTION', $sentinel_option );
@@ -590,6 +667,11 @@ try {
 	$failure_html = ob_get_clean();
 	expect( str_contains( $failure_html, 'id="nac-nac-test" class="nac-connector" open' ), 'A failed save reopens the corresponding connector settings' );
 	expect( ! str_contains( $failure_html, $saved_key ) && ! str_contains( $failure_html, '7391' ), 'The reopened form never redisplays a stored credential or suffix' );
+	$_GET = array( 'nac_status' => 'validation_in_progress', 'nac_provider' => 'nac-test' );
+	ob_start();
+	$admin->render();
+	$nested_html = ob_get_clean();
+	expect( str_contains( $nested_html, 'already being validated' ) && str_contains( $nested_html, 'id="nac-nac-test" class="nac-connector" open' ), 'A rejected nested save shows an explicit notice and reopens its connector' );
 	$_GET = array( 'nac_status' => 'validation_failed', 'nac_provider' => 'not-a-connector' );
 	ob_start();
 	$admin->render();
@@ -652,6 +734,200 @@ try {
 	$current_site->id = $network_id;
 	$plugin->enforce();
 	expect( 'http://ollama.example.invalid:11434' === getenv( 'OLLAMA_HOST' ), 'Returning to the first network restores its Ollama endpoint' );
+
+	$runtime_events = array();
+	$runtime_mode = '';
+	$nested = array();
+	$nested_state = array();
+	$diagnostics = array();
+	$other_plugin = new Plugin();
+	$runtime_filter = static function ( array $definitions ) use ( &$runtime_events, &$runtime_mode, &$nested, &$nested_state, $plugin, $other_plugin ): array {
+		$definitions['azure-ai-foundry']['apply'] = static function ( array $configuration, bool $is_enforced ) use ( &$runtime_events, &$runtime_mode, &$nested, &$nested_state, $plugin, $other_plugin ): void {
+			$runtime_events[] = array(
+				'provider' => 'azure',
+				'network' => Plugin::network_id(),
+				'configuration' => $configuration,
+				'enforced' => $is_enforced,
+				'ollama_host' => getenv( 'OLLAMA_HOST' ),
+			);
+			$is_candidate = array_key_exists( 'api_key', $configuration );
+			$reenter = ( $is_candidate && 'reenter' === $runtime_mode ) || ( ! $is_candidate && $is_enforced && 'reenter_restoration' === $runtime_mode );
+			if ( $reenter && ! isset( $nested['attempted'] ) ) {
+				$nested['attempted'] = true;
+				$nested_state['before'] = array(
+					$plugin->cache_group( 'wp_ai_client' ),
+					$plugin->configuration( 'azure-ai-foundry' ),
+					getenv( 'OLLAMA_HOST' ),
+				);
+				$nested['same'] = $plugin->validate_key( 'azure-ai-foundry', 'valid-azure-key', $configuration );
+				$nested['other'] = $plugin->validate_key( 'nac-test', 'valid-nested-key' );
+				$nested['instance'] = $other_plugin->validate_key( 'nac-test', 'valid-nested-key' );
+				$nested_state['after'] = array(
+					$plugin->cache_group( 'wp_ai_client' ),
+					$plugin->configuration( 'azure-ai-foundry' ),
+					getenv( 'OLLAMA_HOST' ),
+				);
+			}
+			if ( $is_candidate && 'candidate_error' === $runtime_mode ) {
+				throw new \Error( 'SYNTHETIC_SECRET_MARKER: candidate callback failed.' );
+			}
+			if ( ! $is_candidate && $is_enforced && 'restoration_error' === $runtime_mode ) {
+				throw new \TypeError( 'SYNTHETIC_SECRET_MARKER: restoration callback failed.' );
+			}
+			if ( 'switch_error' === $runtime_mode ) {
+				throw new \Error( 'SYNTHETIC_SECRET_MARKER: network switch callback failed.' );
+			}
+		};
+		$definitions['ollama']['apply'] = static function ( array $configuration, bool $is_enforced ) use ( &$runtime_events, &$runtime_mode ): void {
+			$runtime_events[] = array(
+				'provider' => 'ollama',
+				'network' => Plugin::network_id(),
+				'configuration' => $configuration,
+				'enforced' => $is_enforced,
+				'ollama_host' => getenv( 'OLLAMA_HOST' ),
+			);
+			if ( $is_enforced && 'override' === $runtime_mode ) {
+				putenv( 'OLLAMA_HOST=http://extension.example.invalid:11434' );
+			}
+		};
+		return $definitions;
+	};
+	$filter( 'network_ai_connector_provider_settings', $runtime_filter, 20 );
+	$filter(
+		'wp_trigger_error_always_run',
+		static function ( string $function, string $message ) use ( &$diagnostics ): void {
+			if ( str_contains( $function, 'Network_AI_Connector' ) ) {
+				$diagnostics[] = $message;
+			}
+		},
+		10,
+		2
+	);
+
+	$plugin->apply_provider_configuration();
+	expect( array( 'azure', 'ollama' ) === array_column( $runtime_events, 'provider' ), 'Provider integration callbacks run once in their existing order' );
+	expect( $ollama_configuration['host'] === $runtime_events[0]['ollama_host'] && $ollama_configuration['host'] === $runtime_events[1]['ollama_host'], 'The built-in Ollama override runs before every extension callback' );
+	$runtime_events = array();
+	$enforced = false;
+	$plugin->apply_provider_configuration();
+	expect( false === $runtime_events[0]['enforced'] && false === $runtime_events[1]['enforced'] && $deployment_ollama_host === $runtime_events[0]['ollama_host'], 'Callbacks receive the unenforced state after the deployment host is restored' );
+	$enforced = true;
+	$plugin->apply_provider_configuration();
+	$runtime_mode = 'override';
+	$plugin->apply_provider_configuration();
+	expect( 'http://extension.example.invalid:11434' === getenv( 'OLLAMA_HOST' ), 'An Ollama extension callback retains its existing last-write precedence' );
+	$runtime_mode = '';
+	$plugin->apply_provider_configuration();
+	$remove_ollama_integration = static function ( array $definitions ): array {
+		unset( $definitions['ollama'] );
+		return $definitions;
+	};
+	$filter( 'network_ai_connector_provider_settings', $remove_ollama_integration, PHP_INT_MAX );
+	$plugin->apply_provider_configuration();
+	expect( $ollama_configuration['host'] === getenv( 'OLLAMA_HOST' ), 'The built-in Ollama runtime applies even when an extension removes its settings definition' );
+	remove_filter( 'network_ai_connector_provider_settings', $remove_ollama_integration, PHP_INT_MAX );
+
+	$invalid_callback = static function ( array $definitions ): array {
+		$definitions['azure-ai-foundry']['apply'] = 'nac_nonexistent_callback';
+		return $definitions;
+	};
+	$filter( 'network_ai_connector_provider_settings', $invalid_callback, 30 );
+	$runtime_events = array();
+	try {
+		$plugin->apply_provider_configuration();
+		$callback_failure = null;
+	} catch ( \Throwable $exception ) {
+		$callback_failure = $exception;
+	}
+	expect( $callback_failure instanceof \RuntimeException && str_contains( $callback_failure->getMessage(), 'azure-ai-foundry' ) && array( 'ollama' ) === array_column( $runtime_events, 'provider' ), 'A non-callable integration fails explicitly without preventing later callbacks' );
+	remove_filter( 'network_ai_connector_provider_settings', $invalid_callback, 30 );
+
+	$runtime_events = array();
+	$network_id = $networks[1];
+	$current_site->id = $network_id;
+	do_action( 'switch_blog', get_current_blog_id(), get_current_blog_id(), 'switch' );
+	expect( array( 'azure', 'ollama' ) === array_column( $runtime_events, 'provider' ) && 'http://localhost:11434' === $runtime_events[0]['ollama_host'] && array() === $runtime_events[1]['configuration'], 'Blog switching applies callbacks with the new network runtime configuration' );
+	$runtime_events = array();
+	$network_id = $networks[0];
+	$current_site->id = $network_id;
+	do_action( 'switch_blog', get_current_blog_id(), get_current_blog_id(), 'switch' );
+	expect( $ollama_configuration['host'] === $runtime_events[0]['ollama_host'] && $ollama_configuration['host'] === $runtime_events[1]['configuration']['host'], 'Blog switching restores callbacks for the original network' );
+
+	$runtime_events = array();
+	$invalid_candidate = array( 'host' => 'http://wrong.example.invalid', 'note' => 'candidate-setting' );
+	expect( is_wp_error( $plugin->validate_key( 'ollama', '', $invalid_candidate ) ), 'A custom integration observes a failed candidate validation' );
+	expect( 'http://wrong.example.invalid' === $runtime_events[0]['ollama_host'] && $invalid_candidate['host'] === $runtime_events[1]['configuration']['host'], 'Callbacks receive the candidate configuration during validation' );
+	expect( $ollama_configuration['host'] === $runtime_events[2]['ollama_host'] && $ollama_configuration['host'] === $runtime_events[3]['configuration']['host'], 'Callbacks receive the saved configuration after failed validation' );
+
+	$runtime_mode = 'reenter';
+	$runtime_events = array();
+	$before_group = $plugin->cache_group( 'wp_ai_client' );
+	$outer_result = $plugin->validate_key( 'azure-ai-foundry', 'valid-azure-key', $azure_configuration );
+	expect( is_wp_error( $nested['same'] ?? null ) && 'validation_in_progress' === $nested['same']->get_error_code(), 'Nested validation of the same provider is explicitly rejected' );
+	expect( is_wp_error( $nested['other'] ?? null ) && 'validation_in_progress' === $nested['other']->get_error_code(), 'Nested validation of another provider is explicitly rejected' );
+	expect( is_wp_error( $nested['instance'] ?? null ) && 'validation_in_progress' === $nested['instance']->get_error_code(), 'Nested validation through another plugin instance is explicitly rejected' );
+	expect( $nested_state['before'] === $nested_state['after'] && true === $outer_result, 'Rejected nested validation leaves the outer candidate and cache scope intact' );
+	expect( $before_group === $plugin->cache_group( 'wp_ai_client' ) && $ai_registry->getProviderRequestAuthentication( 'azure-ai-foundry' ) instanceof Network_Authentication, 'Successful outer validation restores the cache scope and network authentication' );
+
+	$runtime_mode = 'reenter_restoration';
+	$nested = array();
+	$nested_state = array();
+	$outer_result = $plugin->validate_key( 'azure-ai-foundry', 'valid-azure-key', $azure_configuration );
+	expect( is_wp_error( $nested['same'] ?? null ) && is_wp_error( $nested['other'] ?? null ) && is_wp_error( $nested['instance'] ?? null ) && $nested_state['before'] === $nested_state['after'] && true === $outer_result, 'Nested validation remains blocked throughout runtime restoration' );
+
+	$runtime_mode = 'candidate_error';
+	$runtime_events = array();
+	try {
+		$candidate_failure = $plugin->validate_key( 'azure-ai-foundry', 'valid-azure-key', $azure_configuration );
+	} catch ( \Throwable $exception ) {
+		$candidate_failure = $exception;
+	}
+	expect( is_wp_error( $candidate_failure ) && 'validation_failed' === $candidate_failure->get_error_code() && ! str_contains( $candidate_failure->get_error_message(), 'SYNTHETIC_SECRET_MARKER' ), 'A callback Error produces a sanitized validation failure' );
+	expect( array( 'azure', 'ollama', 'azure', 'ollama' ) === array_column( $runtime_events, 'provider' ), 'A failing callback does not prevent other callbacks from applying and restoring' );
+	expect( $before_group === $plugin->cache_group( 'wp_ai_client' ) && $ollama_configuration['host'] === getenv( 'OLLAMA_HOST' ) && $ai_registry->getProviderRequestAuthentication( 'azure-ai-foundry' ) instanceof Network_Authentication, 'Callback Error cleanup restores host, cache scope, and network authentication' );
+
+	$runtime_mode = 'restoration_error';
+	$runtime_events = array();
+	$keys_before = Plugin::keys();
+	$configurations_before = get_network_option( $network_id, Plugin::CONFIG_OPTION );
+	$candidate_azure = array_merge( $azure_configuration, array( 'model_name' => 'candidate-deployment' ) );
+	try {
+		$restoration_status = $submit( array( 'operation' => 'save', 'api_key' => 'valid-azure-key', 'configuration' => $candidate_azure ), true, 'azure-ai-foundry' );
+	} catch ( \Throwable $exception ) {
+		$restoration_status = $exception;
+	}
+	expect( 'validation_failed' === $restoration_status, 'A callback TypeError during restoration fails the save explicitly' );
+	expect( $keys_before === Plugin::keys() && $configurations_before === get_network_option( $network_id, Plugin::CONFIG_OPTION ), 'A failed restoration preserves the previous network credentials and configuration' );
+	expect( array( 'azure', 'ollama', 'azure', 'ollama' ) === array_column( $runtime_events, 'provider' ) && $ai_registry->getProviderRequestAuthentication( 'azure-ai-foundry' ) instanceof Network_Authentication, 'Restoration continues to other callbacks and restores network authentication after a TypeError' );
+
+	$runtime_mode = '';
+	$azure_directory = AzureProvider::modelMetadataDirectory();
+	$azure_directory->invalidations_before_failure = 2;
+	$cache_failure = $plugin->validate_key( 'azure-ai-foundry', 'valid-azure-key', $azure_configuration );
+	expect( is_wp_error( $cache_failure ) && 'validation_failed' === $cache_failure->get_error_code(), 'A cache invalidation failure during cleanup fails validation explicitly' );
+	expect( $before_group === $plugin->cache_group( 'wp_ai_client' ) && $ai_registry->getProviderRequestAuthentication( 'azure-ai-foundry' ) instanceof Network_Authentication, 'A cache cleanup failure does not prevent runtime and authentication restoration' );
+	expect( true === $plugin->validate_key( 'azure-ai-foundry', 'valid-azure-key', $azure_configuration ), 'Validation can run again after runtime and cleanup failures' );
+
+	$runtime_mode = 'switch_error';
+	$runtime_events = array();
+	$network_id = $networks[1];
+	$current_site->id = $network_id;
+	try {
+		$plugin->enforce();
+		$switch_failure = null;
+	} catch ( \Throwable $exception ) {
+		$switch_failure = $exception;
+	}
+	expect( $switch_failure instanceof \RuntimeException && ! str_contains( $switch_failure->getMessage(), 'SYNTHETIC_SECRET_MARKER' ), 'A runtime callback failure during a network switch surfaces without its sensitive exception' );
+	expect( array( 'azure', 'ollama' ) === array_column( $runtime_events, 'provider' ) && 'http://localhost:11434' === getenv( 'OLLAMA_HOST' ), 'A network switch attempts remaining runtime callbacks after one fails' );
+	$runtime_mode = '';
+	$network_id = $networks[0];
+	$current_site->id = $network_id;
+	$plugin->enforce();
+	expect( $ollama_configuration['host'] === getenv( 'OLLAMA_HOST' ), 'The original network runtime can be reapplied after a failed switch' );
+	expect( count( $diagnostics ) >= 2 && ! str_contains( implode( ' ', $diagnostics ), 'SYNTHETIC_SECRET_MARKER' ), 'Validation diagnostics never expose provider exception details' );
+	remove_filter( 'network_ai_connector_provider_settings', $runtime_filter, 20 );
+
 	ob_start();
 	$admin->render();
 	$provider_html = ob_get_clean();
@@ -688,6 +964,36 @@ try {
 	expect( wp_script_is( 'network-ai-connector-admin', 'enqueued' ), 'The network Connectors screen enqueues its accessible disclosure enhancement' );
 	expect( 'removed' === $submit( array( 'operation' => 'remove', 'confirm_remove' => '1' ) ), 'Confirmed removal deletes the selected network credential' );
 	expect( ! isset( Plugin::keys()['nac-test'] ) && 'valid-network-two' === Plugin::keys( $networks[1] )['nac-test'], 'Removal affects only the selected network' );
+
+	$GLOBALS['nac_cache_order'] = array();
+	$GLOBALS['nac_fail_availability_cache'] = false;
+	$GLOBALS['nac_fail_availability_factory'] = false;
+	$ai_registry->registerProvider( CacheOrderProvider::class );
+	CacheOrderProvider::availability();
+	$GLOBALS['nac_cache_order'] = array();
+	$plugin->clear_provider_cache( 'nac-cache-order' );
+	$expected_cache_order = array( 'get availability', 'get directory', 'clear availability', 'clear directory' );
+	expect( $expected_cache_order === $GLOBALS['nac_cache_order'], 'Both provider cache objects are obtained before either cache is invalidated' );
+	$GLOBALS['nac_fail_availability_cache'] = true;
+	$GLOBALS['nac_cache_order'] = array();
+	try {
+		$plugin->clear_provider_cache( 'nac-cache-order' );
+		$cache_exception = null;
+	} catch ( \Throwable $exception ) {
+		$cache_exception = $exception;
+	}
+	expect( $expected_cache_order === $GLOBALS['nac_cache_order'] && $cache_exception instanceof \RuntimeException && ! str_contains( $cache_exception->getMessage(), 'SYNTHETIC_SECRET_MARKER' ), 'A cache failure is sanitized and does not prevent remaining cache invalidations' );
+	$GLOBALS['nac_fail_availability_cache'] = false;
+	$GLOBALS['nac_fail_availability_factory'] = true;
+	$GLOBALS['nac_cache_order'] = array();
+	try {
+		$plugin->clear_provider_cache( 'nac-cache-order' );
+		$factory_exception = null;
+	} catch ( \Throwable $exception ) {
+		$factory_exception = $exception;
+	}
+	expect( array( 'get availability', 'get directory', 'clear directory' ) === $GLOBALS['nac_cache_order'] && $factory_exception instanceof \RuntimeException && ! str_contains( $factory_exception->getMessage(), 'SYNTHETIC_SECRET_MARKER' ), 'A cache factory failure is sanitized and still permits other cache invalidation' );
+	unset( $GLOBALS['nac_cache_order'], $GLOBALS['nac_fail_availability_cache'], $GLOBALS['nac_fail_availability_factory'] );
 
 	$enforced = false;
 	$plugin->apply_provider_configuration();
@@ -744,5 +1050,10 @@ try {
 		putenv( 'NAC_TEST_API_KEY' );
 	} else {
 		putenv( 'NAC_TEST_API_KEY=' . $original_env );
+	}
+	if ( false === $original_ollama_env ) {
+		putenv( 'OLLAMA_HOST' );
+	} else {
+		putenv( 'OLLAMA_HOST=' . $original_ollama_env );
 	}
 }

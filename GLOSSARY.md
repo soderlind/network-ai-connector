@@ -8,6 +8,12 @@ Shared language for AI provider connections governed by a WordPress multisite ne
 A provider connection governed by a network and authoritative for all its sites, ahead of site configuration and deployment-provided credentials. The connection must be explicitly configured and validated, even when it needs no key.
 _Avoid_: Network default, fallback connection
 
+**Candidate connection**:
+A proposed network-enforced connection awaiting validation and persistence. It does not replace the saved connection until both succeed.
+
+**Provider runtime configuration**:
+The provider settings in effect for a network-enforced connection. During validation they may temporarily reflect a candidate connection instead of the saved connection.
+
 **Site connection**:
 An AI provider connection configured for one site, subordinate to a network-enforced connection while network enforcement is active.
 

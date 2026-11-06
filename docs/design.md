@@ -14,7 +14,9 @@ Azure's internal status marker remains excluded. Its real provider, endpoint, de
 2. Before providers initialize, the plugin overrides mapped options from network configuration. At initialization priorities 19 and PHP_INT_MAX it binds network authentication, including after providers' own authentication callbacks.
 3. Authentication reads credentials from the current site's network at request time. This also protects model instances retained across a blog switch.
 4. An unconfigured connection causes an explicit authentication exception before a managed authenticated request is sent. Required-key providers additionally require a nonempty key.
-5. Cache groups include network, credentials, settings, and candidate validation scope. Candidate settings are applied temporarily and restored after validation, including failures.
+5. Cache groups include network, credentials, settings, and candidate validation scope. The provider runtime applies candidate settings temporarily and restores the current configuration and network authentication after validation, including failures. Nested validations are rejected before they can alter that state.
+
+Built-in runtime adapters run before provider-integration `apply` callbacks, preserving extension callback order and allowing an extension to override a built-in value. The Ollama adapter captures the deployment host when enforcement begins and restores or unsets it when enforcement ends. If a callback fails, the runtime attempts the other callbacks and surfaces a sanitized failure. Validation also attempts cache and authentication cleanup; any cleanup failure prevents the candidate from being saved. A failing integration remains responsible for restoring its own state.
 
 Keys are stored in `network_ai_connector_keys`; enablement and fields live in `network_ai_connector_settings`. Neither option is registered in REST. Network administrators never see saved keys in rendered forms; managed site REST settings return empty values. Mapped PHP option reads supply network values so providers can consume them, including provider-specific credential resolvers.
 
@@ -36,4 +38,4 @@ No automatic import, migration, or deletion of existing site credentials occurs.
 
 ## Verification contract
 
-Verify precedence, no-key refusal, explicit keyless enablement, registry-only providers, Azure headers, Ollama hosts, candidate restoration, network isolation and blog switching, site REST and option write protection, nonce/capabilities, cache invalidation, and uninstall cleanup without affecting native configuration.
+Verify precedence, no-key refusal, explicit keyless enablement, registry-only providers, Azure headers, deployment and network Ollama hosts, callback order and failure cleanup, nested-validation rejection, candidate restoration, network isolation and blog switching, site REST and option write protection, nonce/capabilities, cache invalidation, and uninstall cleanup without affecting native configuration.

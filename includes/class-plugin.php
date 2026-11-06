@@ -3,7 +3,6 @@
 namespace Soderlind\Network_AI_Connector;
 
 use WordPress\AiClient\AiClient;
-use WordPress\AiClient\Common\Contracts\CachesDataInterface;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -14,16 +13,15 @@ final class Plugin {
 	/** @var array<string, bool> */
 	private array $protected_options = array();
 
-	private string $validation_scope = '';
+	private Provider_Runtime $runtime;
 
-	/** @var array<string, array> */
-	private array $validation_configuration = array();
-
-	private ?string $original_ollama_host = null;
-	private bool $ollama_host_changed     = false;
+	public function __construct() {
+		require_once __DIR__ . '/class-provider-settings.php';
+		require_once __DIR__ . '/class-provider-runtime.php';
+		$this->runtime = new Provider_Runtime();
+	}
 
 	public function register(): void {
-		require_once __DIR__ . '/class-provider-settings.php';
 		$this->register_provider_options();
 		add_action( 'init', array( $this, 'enforce' ), 19 );
 		add_action( 'init', array( $this, 'enforce' ), PHP_INT_MAX );
@@ -200,32 +198,11 @@ final class Plugin {
 
 	/** @return array<string, mixed> */
 	public function configuration( string $id ): array {
-		return $this->validation_configuration[ $id ] ?? Provider_Settings::configuration( $id );
+		return $this->runtime->configuration( $id );
 	}
 
 	public function apply_provider_configuration(): void {
-		if ( self::is_enforced() ) {
-			if ( ! $this->ollama_host_changed ) {
-				$host                       = getenv( 'OLLAMA_HOST' );
-				$this->original_ollama_host = false === $host ? null : $host;
-				$this->ollama_host_changed  = true;
-			}
-			$host = $this->configuration( 'ollama' )['host'] ?? 'http://localhost:11434';
-			// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.runtime_configuration_putenv -- The Ollama SDK reads only this environment variable.
-			putenv( 'OLLAMA_HOST=' . $host );
-		} elseif ( $this->ollama_host_changed ) {
-			// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.runtime_configuration_putenv -- Restore the deployment value when leaving an enforced network.
-			putenv( null === $this->original_ollama_host ? 'OLLAMA_HOST' : 'OLLAMA_HOST=' . $this->original_ollama_host );
-			$this->ollama_host_changed = false;
-		}
-		foreach ( Provider_Settings::definitions() as $id => $definition ) {
-			if ( isset( $definition['apply'] ) ) {
-				if ( ! is_callable( $definition['apply'] ) ) {
-					throw new \LogicException( 'The network provider configuration callback must be callable.' );
-				}
-				call_user_func( $definition['apply'], $this->configuration( $id ), self::is_enforced() );
-			}
-		}
+		$this->runtime->apply();
 	}
 
 	public function enforce(): void {
@@ -317,55 +294,14 @@ final class Plugin {
 	}
 
 	public function cache_group( string $group ): string {
-		if ( ! self::is_enforced() ) {
-			return $group;
-		}
-		// Core model-list caches otherwise outlive credential changes and validation attempts.
-		$fingerprint = hash_hmac( 'sha256', (string) wp_json_encode( array( self::keys(), get_network_option( self::network_id(), self::CONFIG_OPTION, array() ) ) ) . $this->validation_scope, wp_salt( 'auth' ) );
-		return $group . '_nac_' . self::network_id() . '_' . $fingerprint;
+		return $this->runtime->cache_group( $group );
 	}
 
 	public function clear_provider_cache( string $id ): void {
-		$registry = AiClient::defaultRegistry();
-		if ( ! $registry->hasProvider( $id ) ) {
-			return;
-		}
-
-		$class   = $registry->getProviderClassName( $id );
-		$objects = array( $class::availability(), $class::modelMetadataDirectory() );
-		foreach ( $objects as $object ) {
-			if ( $object instanceof CachesDataInterface ) {
-				$object->invalidateCaches();
-			}
-		}
+		$this->runtime->clear_provider_cache( $id );
 	}
 
 	public function validate_key( string $id, string $key, array $configuration = array() ): true|\WP_Error {
-		$registry = AiClient::defaultRegistry();
-		if ( ! $registry->hasProvider( $id ) ) {
-			return new \WP_Error( 'provider_inactive', __( 'Network-activate this provider plugin before configuring its network connection.', 'network-ai-connector' ) );
-		}
-
-		$this->validation_scope                = $id . ':' . $key . ':' . wp_json_encode( $configuration );
-		$this->validation_configuration[ $id ] = array_merge( $configuration, array( 'api_key' => $key ) );
-		try {
-			$this->apply_provider_configuration();
-			$this->clear_provider_cache( $id );
-			$registry->setProviderRequestAuthentication( $id, Provider_Settings::authentication( $id, $key ) );
-			if ( ! $registry->isProviderConfigured( $id ) ) {
-				return new \WP_Error( 'validation_failed', __( 'The provider could not validate this key. Check the key, provider configuration, and connectivity. The stored key has not changed.', 'network-ai-connector' ) );
-			}
-			return true;
-		} catch ( \Exception $exception ) {
-			// Provider exceptions can contain credentials or request headers.
-			wp_trigger_error( __METHOD__, sprintf( 'Could not validate network connector "%s".', $id ) );
-			return new \WP_Error( 'validation_failed', __( 'Connection validation failed. The stored key has not changed.', 'network-ai-connector' ) );
-		} finally {
-			$this->clear_provider_cache( $id );
-			$this->validation_scope = '';
-			unset( $this->validation_configuration[ $id ] );
-			$this->apply_provider_configuration();
-			$registry->setProviderRequestAuthentication( $id, new Network_Authentication( $id ) );
-		}
+		return $this->runtime->validate( $id, $key, $configuration );
 	}
 }

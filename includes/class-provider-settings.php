@@ -76,6 +76,17 @@ final class Provider_Settings {
 		);
 	}
 
+	/** @return array<string, array> */
+	public static function built_in_runtime_integrations(): array {
+		require_once __DIR__ . '/class-ollama-runtime.php';
+		return array(
+			'ollama' => array(
+				'apply'                         => array( new Ollama_Runtime(), 'apply' ),
+				'restore_without_configuration' => true,
+			),
+		);
+	}
+
 	/** @return array<string, mixed> */
 	public static function configuration( string $id ): array {
 		$configurations = get_network_option( Plugin::network_id(), Plugin::CONFIG_OPTION, array() );
