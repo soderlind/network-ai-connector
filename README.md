@@ -1,5 +1,7 @@
 # Network AI Connector
 
+> While we're waiting for track ticket https://core.trac.wordpress.org/ticket/64945
+
 Manage AI provider connections for your WordPress multisite network in one place: **Network Admin → Settings → Connectors**. Supported connections use the network configuration instead of individual sites' keys or keys supplied by the hosting environment.
 
 > **Before you activate:** Network enforcement starts immediately. A managed provider without a saved network connection becomes unavailable, even if a site or your server already has a working key. Existing site settings for managed providers are kept, but they are not used while network enforcement is active. Have your provider credentials ready before enabling the plugin.
@@ -67,7 +69,7 @@ Check the key, required fields, endpoint or host URL, and whether the WordPress 
 
 **Where did the site-level AI controls go?**
 
-Managed AI controls are removed from the site Connectors page, which shows a network-management notice instead. Non-AI connectors and providers that are not network-managed retain their own behavior.
+Managed AI controls are removed from the site Connectors page, which shows a network-management notice instead. When no site-level connectors remain, site administrators do not see WordPress's misleading "No connectors yet" prompt. Non-AI connectors and providers that are not network-managed retain their own behavior.
 
 ## Security and removal
 
@@ -111,6 +113,14 @@ NAC_TEST_ALLOW_DATABASE_WRITES=1 wp --skip-plugins --skip-themes eval-file tests
 ```
 
 For Local sites, use a Local-aware WP-CLI wrapper. The suite uses synthetic network identities, temporary namespaced site options, and synthetic credentials in isolated network-option rows. It cleans these up and never sends requests to real AI providers. It temporarily creates and removes test plugins, installs one from a local ZIP without contacting WordPress.org, and blocks network-activation writes. It does not activate the plugin or create sites, networks, or users.
+
+To test the site notice layout without WordPress, use Node.js 18 or later and a Chromium-based browser:
+
+```sh
+node --test tests/site-notice.test.js
+```
+
+Set `CHROME_BIN` to the browser executable if it is not found automatically. The test uses an isolated temporary browser profile.
 
 ## License and credits
 

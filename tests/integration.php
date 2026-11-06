@@ -502,8 +502,16 @@ try {
 	$admin->site_notice();
 	$notice = ob_get_clean();
 	expect( str_contains( $notice, 'managed by your network administrator' ) && str_contains( $notice, 'inline' ) && str_contains( $notice, 'id="network-ai-connector-notice"' ), 'Site notice has a stable mount target and opts out of legacy relocation' );
+	expect( ! str_contains( $notice, 'nac-hide-site-empty-state' ), 'Network administrators retain the core site empty state' );
+	$deny_admin = true;
+	ob_start();
+	$admin->site_notice();
+	$site_admin_notice = ob_get_clean();
+	$deny_admin        = false;
+	expect( str_contains( $site_admin_notice, 'nac-hide-site-empty-state' ), 'Site administrators hide the core site empty state' );
 	$admin->site_assets( 'options-connectors.php' );
 	expect( wp_script_is( 'network-ai-connector-site-notice', 'enqueued' ), 'Site Connectors page enqueues the notice route integration' );
+	expect( wp_style_is( 'network-ai-connector-site-notice', 'enqueued' ), 'Site Connectors page enqueues the notice layout styles' );
 	set_current_screen( 'settings_page_network-ai-connector-network' );
 
 	$response = rest_do_request( new \WP_REST_Request( 'GET', '/wp/v2/settings' ) );

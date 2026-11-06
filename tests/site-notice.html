@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Site connector notice layout test</title>
+	<link rel="stylesheet" href="../assets/site-notice.css">
+	<style>
+		* { box-sizing: border-box; }
+		body { font: 14px/1.5 sans-serif; margin: 0; }
+		.connectors-page { margin: 0 auto; max-width: 680px; padding: 24px; width: 100%; }
+		.connectors-page--empty { align-items: center; display: flex; flex-direction: column; gap: 32px; justify-content: center; min-height: 600px; text-align: center; }
+		.notice { border-left: 4px solid #3858e9; margin: 5px 15px 2px; padding: 8px 12px; }
+		.notice p { margin: 6px 0; }
+		/* Core's notice uses inline-size containment inside its centered empty-state flexbox. */
+		.connectors-page__file-mods-notice { border: 1px solid; container-type: inline-size; display: grid; grid-template-columns: auto 1fr auto; margin-bottom: 16px; padding: 12px; }
+		.connectors-page__file-mods-notice span { grid-column: 2; grid-row: 1; }
+		.connectors-page__file-mods-notice svg { grid-column: 1; grid-row: 1; }
+		@media (max-width: 480px) { .connectors-page { padding: 8px; } }
+	</style>
+</head>
+<body data-result="pending">
+	<div id="wpbody-content">
+		<div id="network-ai-connector-notice" class="notice notice-info inline nac-hide-site-empty-state">
+			<p>AI connections are managed by your network administrator.</p>
+		</div>
+		<div id="stage"></div>
+	</div>
+	<output id="result">PENDING</output>
+	<script src="../assets/site-notice.js"></script>
+	<script>
+		( () => {
+			const frameWidth = new URLSearchParams( location.search ).get( 'frameWidth' );
+			if ( frameWidth ) {
+				const frame = document.createElement( 'iframe' );
+				frame.style.width = `${ frameWidth }px`;
+				frame.style.height = '900px';
+				frame.style.border = '0';
+				frame.src = 'site-notice.html';
+				frame.onload = () => {
+					const child = frame.contentDocument;
+					document.body.dataset.result = child.body.dataset.result;
+					document.body.dataset.viewportWidth = child.body.dataset.viewportWidth;
+					document.getElementById( 'result' ).textContent = child.getElementById( 'result' ).textContent;
+				};
+				document.getElementById( 'stage' ).append( frame );
+				return;
+			}
+
+			const page = document.createElement( 'div' );
+			page.className = 'connectors-page connectors-page--empty';
+			page.innerHTML = '<div class="connectors-page__file-mods-notice"><span>You do not have permission to install plugins. Please ask a site administrator to install them for you.</span><svg width="24" height="24" aria-hidden="true"></svg></div><div id="empty-state" class="components-v-stack"><div class="components-v-stack"><h2>No connectors yet</h2><span>Connectors appear here when you install plugins.</span></div><a href="plugin-install.php">Learn more</a></div>';
+			document.getElementById( 'stage' ).append( page );
+
+			queueMicrotask( () => {
+				const errors = [];
+				const notice = document.getElementById( 'network-ai-connector-notice' );
+				const warning = page.querySelector( '.connectors-page__file-mods-notice' );
+				const emptyState = document.getElementById( 'empty-state' );
+				const contentWidth = () => {
+					const style = getComputedStyle( page );
+					return page.clientWidth - parseFloat( style.paddingLeft ) - parseFloat( style.paddingRight );
+				};
+				const check = ( condition, message ) => {
+					if ( ! condition ) {
+						errors.push( message );
+					}
+				};
+				const checkFit = ( element, text, label ) => {
+					const box = element.getBoundingClientRect();
+					const textBox = text.getBoundingClientRect();
+					check( box.width >= contentWidth() - 1, `${ label } does not fill the content width` );
+					check( textBox.left >= box.left - 1 && textBox.right <= box.right + 1, `${ label } text overflows` );
+					check( getComputedStyle( element ).textAlign === 'start', `${ label } is not start-aligned` );
+				};
+
+				check( page.firstElementChild === notice, 'Notice was not mounted before the empty state' );
+				checkFit( notice, notice.querySelector( 'p' ), 'Network notice' );
+				checkFit( warning, warning.querySelector( 'span' ), 'Permission notice' );
+				check(
+					[ emptyState, ...emptyState.querySelectorAll( 'h2, span, a' ) ].every( ( element ) => element.getClientRects().length === 0 ),
+					'Site administrators can still see the core empty state'
+				);
+				check( getComputedStyle( page ).justifyContent === 'flex-start', 'Site-admin notices are not aligned to the top' );
+				warning.remove();
+				check( emptyState.offsetHeight === 0, 'Core empty state is visible without a permission notice' );
+				page.insertBefore( warning, emptyState );
+				notice.classList.remove( 'nac-hide-site-empty-state' );
+				check( emptyState.offsetHeight > 0, 'Network administrators cannot see the core empty state' );
+				check( getComputedStyle( page ).justifyContent === 'center', 'Network administrator layout was changed' );
+				notice.classList.add( 'nac-hide-site-empty-state' );
+				const unrelated = document.createElement( 'div' );
+				unrelated.className = 'components-v-stack';
+				unrelated.innerHTML = '<div>Other content</div><a href="plugin-install.php">Other plugin action</a>';
+				page.append( unrelated );
+				check( unrelated.offsetHeight > 0, 'Unrelated content was hidden' );
+				unrelated.remove();
+
+				page.dir = 'rtl';
+				checkFit( notice, notice.querySelector( 'p' ), 'RTL network notice' );
+				checkFit( warning, warning.querySelector( 'span' ), 'RTL permission notice' );
+				page.removeAttribute( 'dir' );
+
+				page.classList.remove( 'connectors-page--empty' );
+				check( emptyState.offsetHeight > 0, 'Content was hidden on a non-empty page' );
+				const otherConnector = document.createElement( 'div' );
+				otherConnector.className = 'components-item';
+				otherConnector.textContent = 'Other connector';
+				page.append( otherConnector );
+				checkFit( notice, notice.querySelector( 'p' ), 'Network notice with other connectors' );
+				check( otherConnector.offsetHeight > 0, 'An unmanaged connector was hidden' );
+
+				document.body.dataset.viewportWidth = window.innerWidth;
+				document.body.dataset.result = errors.length ? 'fail' : 'pass';
+				document.getElementById( 'result' ).textContent = errors.length ? errors.join( '; ' ) : 'PASS';
+			} );
+		} )();
+	</script>
+</body>
+</html>

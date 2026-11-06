@@ -24,9 +24,9 @@ Site settings REST writes naming managed credentials fail with an explicit 403 e
 
 ## Administration and failure behavior
 
-Site Connectors pages retain non-managed entries and display a network-managed notice naming managed providers. Managed AI entries are removed from the client-side editable list.
+Site Connectors pages retain non-managed entries and display a network-managed notice naming managed providers. Managed AI entries are removed from the client-side editable list. When the remaining list is empty, the site administrator's core empty-state prompt is hidden; network administrators retain it.
 
-Core hides legacy admin notices on this route. A small dependency-free script places the native notice inside the asynchronously rendered Connectors page, without duplicating core's application or changing other connectors.
+Core hides legacy admin notices on this route. A small dependency-free script places the native notice inside the asynchronously rendered Connectors page, without duplicating core's application or changing other connectors. Route-specific styles align the notice and prevent the core permission notice from collapsing in the empty-state layout.
 
 Each network form has a network/provider-bound nonce, capability check, explicit operation, and registered-provider allowlist. New/replacement keys must validate through the AI Client before persistence. Errors reopen the affected provider, retain the previous key, do not redisplay submitted credentials, and do not echo provider exceptions that might contain secrets. Removal is explicit and requires confirmation. Like the site Connectors page, providers whose plugin is missing offer Install (from WordPress.org, through core's upgrader) and inactive providers offer Activate; both network-activate the connector's declared plugin file. Activate requires `manage_network_plugins`; Install also requires `install_plugins` and allowed file modifications. Without those capabilities a Learn more link to the plugin directory is shown; providers without plugin metadata are Not available.
 

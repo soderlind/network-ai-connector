@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Network AI Connector
  * Description: Network-enforced AI provider credentials for WordPress multisite.
- * Version: 0.1.1
+ * Version: 0.1.2
  * Requires at least: 7.1
  * Requires PHP: 8.2
  * Network: true

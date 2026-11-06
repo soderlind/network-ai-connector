@@ -23,7 +23,8 @@ final class Admin {
 
 	public function site_assets( string $hook ): void {
 		if ( 'options-connectors.php' === $hook && Plugin::is_enforced() && $this->plugin->connectors() ) {
-			wp_enqueue_script( 'network-ai-connector-site-notice', plugins_url( 'assets/site-notice.js', PLUGIN_FILE ), array(), '0.1.1', true );
+			wp_enqueue_style( 'network-ai-connector-site-notice', plugins_url( 'assets/site-notice.css', PLUGIN_FILE ), array(), '0.1.2' );
+			wp_enqueue_script( 'network-ai-connector-site-notice', plugins_url( 'assets/site-notice.js', PLUGIN_FILE ), array(), '0.1.2', true );
 		}
 	}
 
@@ -32,8 +33,8 @@ final class Admin {
 			return;
 		}
 
-		wp_enqueue_style( 'network-ai-connector-admin', plugins_url( 'assets/network-admin.css', PLUGIN_FILE ), array(), '0.1.1' );
-		wp_enqueue_script( 'network-ai-connector-admin', plugins_url( 'assets/network-admin.js', PLUGIN_FILE ), array(), '0.1.1', true );
+		wp_enqueue_style( 'network-ai-connector-admin', plugins_url( 'assets/network-admin.css', PLUGIN_FILE ), array(), '0.1.2' );
+		wp_enqueue_script( 'network-ai-connector-admin', plugins_url( 'assets/network-admin.js', PLUGIN_FILE ), array(), '0.1.2', true );
 	}
 
 	public function menu(): void {
@@ -181,7 +182,11 @@ final class Admin {
 			return;
 		}
 
-		$names = array_column( $this->plugin->connectors(), 'name' );
+		$names          = array_column( $this->plugin->connectors(), 'name' );
+		$notice_classes = array( 'inline' );
+		if ( ! current_user_can( 'manage_network_options' ) ) {
+			$notice_classes[] = 'nac-hide-site-empty-state';
+		}
 		wp_admin_notice(
 			sprintf(
 				/* translators: %s: Comma-separated AI provider names. */
@@ -191,7 +196,7 @@ final class Admin {
 			array(
 				'id'                 => 'network-ai-connector-notice',
 				'type'               => 'info',
-				'additional_classes' => array( 'inline' ),
+				'additional_classes' => $notice_classes,
 			)
 		);
 	}
