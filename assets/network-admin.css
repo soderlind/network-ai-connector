@@ -1,0 +1,250 @@
+body.settings_page_network-ai-connector.network-admin {
+	background: #fff;
+}
+
+body.settings_page_network-ai-connector.network-admin #wpcontent {
+	padding-inline-start: 0;
+}
+
+.nac-page__header {
+	border-bottom: 1px solid #e0e0e0;
+	padding: 24px;
+}
+
+.nac-page__header h1 {
+	color: #1e1e1e;
+	font-size: 15px;
+	font-weight: 600;
+	line-height: 20px;
+	margin: 0;
+	padding: 0;
+}
+
+.nac-page__header p {
+	color: #757575;
+	font-size: 13px;
+	line-height: 20px;
+	margin: 4px 0 0;
+}
+
+.nac-page__content {
+	box-sizing: border-box;
+	margin: 0 auto;
+	max-width: 680px;
+	padding: 24px;
+	width: 100%;
+}
+
+.nac-page__content > .notice {
+	margin: 0 0 12px;
+}
+
+.nac-connector-list {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.nac-connector-list > li {
+	margin: 0;
+}
+
+.nac-connector {
+	background: #fff;
+	border: 1px solid #ddd;
+	border-radius: 8px;
+	overflow: hidden;
+	padding: 20px;
+	scroll-margin-top: 120px;
+}
+
+.nac-connector__summary {
+	align-items: center;
+	cursor: pointer;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 16px;
+	list-style: none;
+}
+
+.nac-connector__summary::-webkit-details-marker {
+	display: none;
+}
+
+.nac-connector__summary::marker {
+	content: "";
+}
+
+.nac-connector__summary:focus-visible {
+	outline: 2px solid var(--wp-admin-theme-color, #3858e9);
+	outline-offset: 4px;
+}
+
+.nac-connector__logo {
+	flex: 0 0 40px;
+	height: 40px;
+	object-fit: contain;
+	width: 40px;
+}
+
+.nac-connector__copy {
+	flex: 1 1 180px;
+	min-width: 0;
+}
+
+.nac-connector__copy h2 {
+	color: #1e1e1e;
+	font-size: 15px;
+	font-weight: 600;
+	line-height: 20px;
+	margin: 0;
+}
+
+.nac-connector__description {
+	color: #757575;
+	display: block;
+	font-size: 12px;
+	line-height: 20px;
+}
+
+.nac-connector__badge {
+	background: #f0f0f0;
+	border-radius: 2px;
+	color: #50575e;
+	font-size: 12px;
+	font-weight: 600;
+	padding: 4px 8px;
+	white-space: nowrap;
+}
+
+.nac-connector__badge--connected {
+	background: #eff8f0;
+	color: #345b37;
+}
+
+.nac-connector__badge--unverified {
+	background: #fcf3dc;
+	color: #6a4b00;
+}
+
+.nac-connector__action {
+	align-items: center;
+	border: 1px solid var(--wp-admin-theme-color, #3858e9);
+	border-radius: 4px;
+	box-sizing: border-box;
+	color: var(--wp-admin-theme-color, #3858e9);
+	display: inline-flex;
+	font-size: 13px;
+	font-weight: 500;
+	justify-content: center;
+	min-height: 36px;
+	padding: 0 12px;
+	white-space: nowrap;
+}
+
+.nac-connector--plugin .nac-connector__summary {
+	cursor: default;
+}
+
+.nac-connector__plugin-form {
+	margin: 0;
+}
+
+button.nac-connector__action {
+	background: transparent;
+	cursor: pointer;
+	font-family: inherit;
+	line-height: normal;
+}
+
+button.nac-connector__action:hover:not(.is-busy) {
+	background: color-mix(in srgb, var(--wp-admin-theme-color, #3858e9) 4%, transparent);
+}
+
+button.nac-connector__action:focus-visible {
+	box-shadow: 0 0 0 1px #fff, 0 0 0 3px var(--wp-admin-theme-color, #3858e9);
+	outline: 2px solid transparent;
+}
+
+button.nac-connector__action.is-busy {
+	cursor: progress;
+	opacity: 0.6;
+}
+
+.nac-connector__link {
+	font-size: 13px;
+	white-space: nowrap;
+}
+
+.nac-connector__action--open,
+.nac-connector[open] .nac-connector__action--closed {
+	display: none;
+}
+
+.nac-connector[open] .nac-connector__action--open {
+	border-color: transparent;
+	display: inline-flex;
+}
+
+.nac-connector__cancel-label,
+.nac-connector--enhanced .nac-connector__close-label {
+	display: none;
+}
+
+.nac-connector--enhanced .nac-connector__cancel-label {
+	display: inline;
+}
+
+.nac-connector__settings {
+	margin-top: 20px;
+}
+
+.nac-connector__settings p {
+	line-height: 20px;
+	margin: 0 0 12px;
+}
+
+.nac-connector__settings label {
+	display: block;
+}
+
+.nac-connector__settings input[type="password"],
+.nac-connector__settings input[type="url"],
+.nac-connector__settings input[type="text"] {
+	box-sizing: border-box;
+	display: block;
+	font-family: monospace;
+	margin-top: 8px;
+	max-width: none;
+	min-height: 40px;
+	width: 100%;
+}
+
+.nac-connector__settings fieldset {
+	margin-bottom: 12px;
+}
+
+.nac-connector__settings fieldset label {
+	margin-top: 6px;
+}
+
+.nac-connector__settings .button {
+	min-height: 40px;
+}
+
+@media (max-width: 480px) {
+	.nac-page__content {
+		padding: 8px;
+	}
+
+	.nac-connector {
+		padding: 12px;
+	}
+
+	.nac-connector__summary {
+		gap: 12px;
+	}
+}
