@@ -5,7 +5,7 @@ Shared language for AI provider connections governed by a WordPress multisite ne
 ## Language
 
 **Network-enforced connection**:
-A provider connection governed by a network and authoritative for all its sites, ahead of site configuration and deployment-provided credentials. The connection must be explicitly configured and validated, even when it needs no key.
+A provider connection governed by a network and authoritative for all its sites, ahead of site configuration and deployment-provided credentials. Connections that need a key must be explicitly configured and validated; keyless connections use provider defaults until configured.
 _Avoid_: Network default, fallback connection
 
 **Candidate connection**:
@@ -24,7 +24,7 @@ The set of sites governed by one network's connection policy, independent of oth
 An AI provider whose standard connection requires an API key.
 
 **Keyless provider**:
-An AI provider connection that requires no API key, such as a local Ollama server. Keyless does not mean automatically enabled.
+An AI provider connection that requires no API key, such as a local Ollama server. Like the site Connectors page, it is enabled with provider defaults until a network administrator saves other settings.
 
 **Provider integration**:
 The description of a provider's additional connection settings and authentication behavior needed to manage it network-wide.

@@ -4,7 +4,7 @@ Tags: multisite, ai, connectors, network, api
 Requires at least: 7.1
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 0.1.2
+Stable tag: 0.1.3
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,9 +59,9 @@ Not available can mean the provider lacks usable plugin information, or its netw
 
 = Does Ollama need an API key? =
 
-An API key is optional if your Ollama server does not require one, but you must save and validate the host to enable the connection. The default `http://localhost:11434` refers to the WordPress server, not your browser's computer. Ollama must be running separately and reachable from WordPress.
+An API key is optional if your Ollama server does not require one. Like the site Connectors page, Ollama works right away with the default host and no key. To use another host or a key, edit and save the connection; it is validated first. The default `http://localhost:11434` refers to the WordPress server, not your browser's computer. Ollama must be running separately and reachable from WordPress.
 
-To switch an authenticated Ollama connection to a keyless one, remove the connection and set it up again without a key.
+To stop using a saved Ollama key, select "Remove saved key and connect without one" and save. "Reset to default" removes all saved Ollama settings.
 
 = How are keys stored? =
 
@@ -72,6 +72,13 @@ Keys are stored in WordPress network options. The plugin does not add applicatio
 Uninstalling deletes the plugin's network keys and settings from all networks in the installation. Existing site settings are not deleted.
 
 == Changelog ==
+
+= 0.1.3 =
+
+* Ollama works network-wide with its default host and no key, matching the site Connectors page.
+* Add "Remove saved key and connect without one" for Ollama.
+* Replace Ollama's "Remove network connection" with "Reset to default".
+* Simplify the README and link the latest release ZIP.
 
 = 0.1.2 =
 

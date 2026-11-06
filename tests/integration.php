@@ -704,12 +704,8 @@ try {
 	$ai_registry->registerProvider( UnmanagedProvider::class );
 	$plugin->enforce();
 	expect( isset( $plugin->connectors()['azure-ai-foundry'], $plugin->connectors()['ollama'] ), 'Providers missing from the connector registry are discovered through AI Client metadata' );
-	try {
-		$ai_registry->getProviderRequestAuthentication( 'ollama' )->getApiKey();
-		expect( false, 'A keyless connection must be explicitly enabled' );
-	} catch ( \RuntimeException $exception ) {
-		expect( true, 'An unconfigured keyless connection is disabled' );
-	}
+	expect( Provider_Settings::enabled( 'ollama' ) && '' === $ai_registry->getProviderRequestAuthentication( 'ollama' )->getApiKey(), 'An unconfigured keyless connection works with an empty key, like the site Connectors page' );
+	expect( 'http://localhost:11434' === getenv( 'OLLAMA_HOST' ), 'An unconfigured keyless connection uses the provider default host' );
 	$ollama_configuration = array( 'host' => 'http://ollama.example.invalid:11434', 'note' => 'network-provider-setting' );
 	expect( 'saved' === $submit( array( 'operation' => 'save', 'api_key' => '', 'configuration' => $ollama_configuration ), true, 'ollama' ), 'A validated local Ollama connection can be enabled without an API key' );
 	expect( Provider_Settings::enabled( 'ollama' ) && '' === $ai_registry->getProviderRequestAuthentication( 'ollama' )->getApiKey(), 'Enabled keyless connections authenticate with an empty key rather than falling back to site credentials' );
@@ -737,7 +733,7 @@ try {
 	$network_id = $networks[1];
 	$current_site->id = $network_id;
 	$plugin->enforce();
-	expect( ! Provider_Settings::enabled( 'ollama' ) && 'http://localhost:11434' === getenv( 'OLLAMA_HOST' ), 'Switching networks does not reuse another network keyless connection or endpoint' );
+	expect( ! isset( get_network_option( $network_id, Plugin::CONFIG_OPTION, array() )['ollama'] ) && 'http://localhost:11434' === getenv( 'OLLAMA_HOST' ), 'Switching networks does not reuse another network keyless settings or endpoint' );
 	$network_id = $networks[0];
 	$current_site->id = $network_id;
 	$plugin->enforce();
@@ -964,7 +960,10 @@ try {
 	expect( in_array( 'azure-ai-foundry/connectors', wp_script_modules()->get_queue(), true ), 'The custom site connector module is initially queued' );
 	$plugin->remove_managed_modules();
 	expect( ! in_array( 'azure-ai-foundry/connectors', wp_script_modules()->get_queue(), true ), 'Managed custom site connector modules are dequeued' );
-	expect( 'removed' === $submit( array( 'operation' => 'remove', 'confirm_remove' => '1' ), true, 'ollama' ) && ! Provider_Settings::enabled( 'ollama' ), 'Removing a keyless connection disables it and removes its network settings' );
+	expect( 'saved' === $submit( array( 'operation' => 'save', 'api_key' => 'valid-ollama-key', 'configuration' => $ollama_configuration ), true, 'ollama' ) && 'valid-ollama-key' === Plugin::keys()['ollama'], 'A keyless provider can store an optional key' );
+	expect( 'key_conflict' === $submit( array( 'operation' => 'save', 'api_key' => 'other-key', 'clear_key' => '1', 'configuration' => $ollama_configuration ), true, 'ollama' ) && 'valid-ollama-key' === Plugin::keys()['ollama'], 'Entering a key and removing it at once is rejected without changing the key' );
+	expect( 'saved' === $submit( array( 'operation' => 'save', 'clear_key' => '1', 'configuration' => $ollama_configuration ), true, 'ollama' ) && '' === Plugin::keys()['ollama'] && Provider_Settings::enabled( 'ollama' ), 'An optional key can be removed without removing the connection' );
+	expect( 'reset' === $submit( array( 'operation' => 'remove', 'confirm_remove' => '1' ), true, 'ollama' ) && ! isset( Provider_Settings::configuration( 'ollama' )['host'] ) && Provider_Settings::enabled( 'ollama' ), 'Resetting a keyless connection removes network settings and returns to provider defaults' );
 
 	$admin->menu();
 	$admin->network_assets( get_plugin_page_hookname( Admin::PAGE, 'settings.php' ) );

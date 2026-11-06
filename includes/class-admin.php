@@ -23,8 +23,8 @@ final class Admin {
 
 	public function site_assets( string $hook ): void {
 		if ( 'options-connectors.php' === $hook && Plugin::is_enforced() && $this->plugin->connectors() ) {
-			wp_enqueue_style( 'network-ai-connector-site-notice', plugins_url( 'assets/site-notice.css', PLUGIN_FILE ), array(), '0.1.2' );
-			wp_enqueue_script( 'network-ai-connector-site-notice', plugins_url( 'assets/site-notice.js', PLUGIN_FILE ), array(), '0.1.2', true );
+			wp_enqueue_style( 'network-ai-connector-site-notice', plugins_url( 'assets/site-notice.css', PLUGIN_FILE ), array(), '0.1.3' );
+			wp_enqueue_script( 'network-ai-connector-site-notice', plugins_url( 'assets/site-notice.js', PLUGIN_FILE ), array(), '0.1.3', true );
 		}
 	}
 
@@ -33,8 +33,8 @@ final class Admin {
 			return;
 		}
 
-		wp_enqueue_style( 'network-ai-connector-admin', plugins_url( 'assets/network-admin.css', PLUGIN_FILE ), array(), '0.1.2' );
-		wp_enqueue_script( 'network-ai-connector-admin', plugins_url( 'assets/network-admin.js', PLUGIN_FILE ), array(), '0.1.2', true );
+		wp_enqueue_style( 'network-ai-connector-admin', plugins_url( 'assets/network-admin.css', PLUGIN_FILE ), array(), '0.1.3' );
+		wp_enqueue_script( 'network-ai-connector-admin', plugins_url( 'assets/network-admin.js', PLUGIN_FILE ), array(), '0.1.3', true );
 	}
 
 	public function menu(): void {
@@ -86,14 +86,18 @@ final class Admin {
 			}
 			unset( $keys[ $id ] );
 			unset( $configurations[ $id ] );
-			$status = 'removed';
+			$status = empty( Provider_Settings::definitions()[ $id ]['key_optional'] ) ? 'removed' : 'reset';
 		} elseif ( 'save' === $operation ) {
 			if ( 'active' !== $this->plugin_state( $id, $this->plugin->connectors()[ $id ] ) ) {
 				$this->redirect( 'provider_inactive', $id );
 			}
 			$definition = Provider_Settings::definitions()[ $id ] ?? array();
 			$key        = isset( $_POST['api_key'] ) && is_string( $_POST['api_key'] ) ? trim( wp_unslash( $_POST['api_key'] ) ) : '';
-			if ( '' === $key && ! empty( $definition['fields'] ) ) {
+			$clear_key  = ! empty( $definition['key_optional'] ) && '1' === ( $_POST['clear_key'] ?? '' );
+			if ( $clear_key && '' !== $key ) {
+				$this->redirect( 'key_conflict', $id );
+			}
+			if ( '' === $key && ! $clear_key && ! empty( $definition['fields'] ) ) {
 				$key = $keys[ $id ] ?? '';
 			}
 			if ( ( '' === $key && empty( $definition['key_optional'] ) ) || preg_match( '/[\x00-\x20\x7f]/', $key ) ) {
@@ -209,7 +213,7 @@ final class Admin {
 		$status     = $this->requested_status();
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only provider ID, checked against registered connectors.
 		$provider = isset( $_GET['nac_provider'] ) && is_string( $_GET['nac_provider'] ) ? sanitize_key( wp_unslash( $_GET['nac_provider'] ) ) : '';
-		$reopen   = in_array( $status, array( 'invalid_key', 'invalid_configuration', 'confirm_remove', 'provider_inactive', 'validation_failed', 'validation_in_progress', 'storage_failed', 'installed', 'activated' ), true ) && isset( $connectors[ $provider ] ) ? $provider : '';
+		$reopen   = in_array( $status, array( 'invalid_key', 'key_conflict', 'invalid_configuration', 'confirm_remove', 'provider_inactive', 'validation_failed', 'validation_in_progress', 'storage_failed', 'installed', 'activated' ), true ) && isset( $connectors[ $provider ] ) ? $provider : '';
 		ksort( $connectors );
 		?>
 		<div class="nac-page">
@@ -352,16 +356,24 @@ final class Admin {
 											</p>
 											<?php if ( $has_key ) : ?>
 												<p><?php esc_html_e( 'A network key is stored. It is never displayed. Leaving the field blank does not remove it.', 'network-ai-connector' ); ?></p>
+												<?php if ( ! empty( $definition['key_optional'] ) ) : ?>
+													<p><label><input type="checkbox" name="clear_key" value="1"> <?php esc_html_e( 'Remove saved key and connect without one', 'network-ai-connector' ); ?></label></p>
+												<?php endif; ?>
 											<?php endif; ?>
 											<?php if ( ! empty( $definition['key_optional'] ) ) : ?>
-												<p><?php esc_html_e( 'The API key is optional for local servers. Saving validates and enables this connection for the network.', 'network-ai-connector' ); ?></p>
+												<p><?php esc_html_e( 'The API key is optional for local servers. Without saved settings, the default host is used without a key.', 'network-ai-connector' ); ?></p>
 											<?php endif; ?>
 											<p><?php esc_html_e( 'New and replacement keys are validated before they are saved.', 'network-ai-connector' ); ?></p>
 											<?php if ( ! empty( $connector['authentication']['credentials_url'] ) ) : ?>
 												<p><a href="<?php echo esc_url( $connector['authentication']['credentials_url'] ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Get an API key', 'network-ai-connector' ); ?></a></p>
 											<?php endif; ?>
 											<p><button class="button button-primary" type="submit" name="operation" value="save"><?php esc_html_e( 'Save', 'network-ai-connector' ); ?></button></p>
-											<?php if ( $enabled ) : ?>
+											<?php if ( ! empty( $definition['key_optional'] ) ) : ?>
+												<?php if ( $has_key || array() !== $configuration ) : ?>
+													<p><label><input type="checkbox" name="confirm_remove" value="1"> <?php esc_html_e( 'Confirm reset: saved settings are removed and the default host is used without a key.', 'network-ai-connector' ); ?></label></p>
+													<p><button class="button" type="submit" name="operation" value="remove" formnovalidate><?php esc_html_e( 'Reset to default', 'network-ai-connector' ); ?></button></p>
+												<?php endif; ?>
+											<?php elseif ( $enabled ) : ?>
 												<p><label><input type="checkbox" name="confirm_remove" value="1"> <?php esc_html_e( 'Confirm removal: this provider will become unavailable across this network.', 'network-ai-connector' ); ?></label></p>
 												<p><button class="button" type="submit" name="operation" value="remove" formnovalidate><?php esc_html_e( 'Remove network connection', 'network-ai-connector' ); ?></button></p>
 											<?php endif; ?>
@@ -528,6 +540,8 @@ final class Admin {
 			'activate_failed'        => sprintf( __( 'Failed to network-activate plugin for %s.', 'network-ai-connector' ), $name ),
 			'saved'                  => __( 'Network connection validated and saved.', 'network-ai-connector' ),
 			'removed'                => __( 'Network connection removed. This provider is now unavailable across the network.', 'network-ai-connector' ),
+			'reset'                  => __( 'Network settings reset. This provider now uses its default host without a key.', 'network-ai-connector' ),
+			'key_conflict'           => __( 'Either enter a replacement key or remove the saved key, not both. The stored key has not changed.', 'network-ai-connector' ),
 			'invalid_key'            => __( 'Enter a non-empty API key without whitespace or control characters. The stored key has not changed.', 'network-ai-connector' ),
 			'confirm_remove'         => __( 'Confirm removal before removing the network key.', 'network-ai-connector' ),
 			'provider_inactive'      => __( 'Network-activate the provider plugin before validating its network connection.', 'network-ai-connector' ),
@@ -537,7 +551,7 @@ final class Admin {
 			'invalid_configuration'  => __( 'Enter valid provider settings. URLs must use HTTP or HTTPS and must not contain credentials or fragments. The stored connection has not changed.', 'network-ai-connector' ),
 		);
 		if ( isset( $messages[ $status ] ) ) {
-			wp_admin_notice( $messages[ $status ], array( 'type' => in_array( $status, array( 'saved', 'removed', 'installed', 'activated' ), true ) ? 'success' : 'error' ) );
+			wp_admin_notice( $messages[ $status ], array( 'type' => in_array( $status, array( 'saved', 'removed', 'reset', 'installed', 'activated' ), true ) ? 'success' : 'error' ) );
 		}
 	}
 }

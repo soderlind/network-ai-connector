@@ -97,7 +97,10 @@ final class Provider_Settings {
 	}
 
 	public static function enabled( string $id ): bool {
-		return '' !== ( Plugin::keys()[ $id ] ?? '' ) || true === ( self::configuration( $id )['enabled'] ?? false );
+		// Like the site Connectors page, optional-key providers work with their defaults until configured.
+		return '' !== ( Plugin::keys()[ $id ] ?? '' )
+			|| true === ( self::configuration( $id )['enabled'] ?? false )
+			|| ! empty( self::definitions()[ $id ]['key_optional'] );
 	}
 
 	public static function authentication( string $id, string $key ): ApiKeyRequestAuthentication {

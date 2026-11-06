@@ -31,7 +31,7 @@ If a connection cannot be validated, it is not saved. When replacing an existing
 
 **Azure AI Foundry:** Install **AI Provider for Azure AI Foundry**. Enter the endpoint, deployment names, capabilities, and API key.
 
-**Ollama:** Install **AI Provider for Ollama** by Fueled and enter the Ollama host URL. A key is optional if your Ollama server does not require one, but the connection still needs to be saved and validated. `http://localhost:11434` refers to the WordPress server—not your own computer. Ollama must be running and reachable from that server.
+**Ollama:** Install and network-activate **AI Provider for Ollama** by Fueled. Like the site Connectors page, it works right away with the default host (`http://localhost:11434`) and no key. To use another host or an API key, choose **Edit**, enter the details, and save; the connection is validated first. `http://localhost:11434` refers to the WordPress server—not your own computer. Ollama must be running and reachable from that server.
 
 Other compatible API-key providers are discovered through the WordPress Connectors and AI Client registries. A provider that needs extra settings may require a Network AI Connector integration. Providers marked **not network-managed** do not expose compatible request authentication, so this plugin cannot control their connections.
 
@@ -44,7 +44,7 @@ Managed AI connections are controlled by your network administrator. Their setti
 - To change a connection, open it with **Edit** and save the updated details.
 - Saved keys are never displayed. Enter a new key to replace the current one; leaving the key field blank keeps the saved key.
 - To remove a connection, choose **Confirm removal**, then **Remove network connection**. The managed provider stops working until it is configured again; it will **not** fall back to a site's key.
-- To change Ollama from an authenticated connection to a keyless connection, remove it and set it up again without a key.
+- To stop using an Ollama key, select **Remove saved key and connect without one**, then **Save**. **Reset to default** removes all saved Ollama settings and returns to the default host without a key.
 
 ## Troubleshooting
 

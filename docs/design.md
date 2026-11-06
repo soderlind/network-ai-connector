@@ -4,7 +4,7 @@
 
 The plugin discovers API-key-capable AI providers through the WordPress Connectors and AI Client registries. A provider-settings integration maps custom fields and authentication; Azure AI Foundry and Fueled's Ollama ship with integrations. The network page follows core's compact connector list and inline Set up/Edit workflow. Server-rendered forms and native disclosure controls remain usable without JavaScript; the small enhancement resets unsaved input on Cancel.
 
-Only users with `manage_network_options` can configure connections. The boundary is one network. Required-key connections without a key are disabled. Optional-key connections such as local Ollama must also be explicitly saved and validated before enablement. Non-AI connectors remain outside enforcement. Providers without compatible request authentication are reported as unmanaged rather than falsely advertised as protected; the SDK provides no universal disable hook for arbitrary provider implementations.
+Only users with `manage_network_options` can configure connections. The boundary is one network. Required-key connections without a key are disabled. Optional-key connections such as local Ollama match the site Connectors page: they are enabled with provider defaults (empty key, default host) until saved settings replace them. Saved settings are validated first; an optional saved key can be cleared explicitly, and Reset returns to defaults. Non-AI connectors remain outside enforcement. Providers without compatible request authentication are reported as unmanaged rather than falsely advertised as protected; the SDK provides no universal disable hook for arbitrary provider implementations.
 
 Azure's internal status marker remains excluded. Its real provider, endpoint, deployment names, capabilities, and custom `api-key` authentication are network-managed.
 
@@ -38,4 +38,4 @@ No automatic import, migration, or deletion of existing site credentials occurs.
 
 ## Verification contract
 
-Verify precedence, no-key refusal, explicit keyless enablement, registry-only providers, Azure headers, deployment and network Ollama hosts, callback order and failure cleanup, nested-validation rejection, candidate restoration, network isolation and blog switching, site REST and option write protection, nonce/capabilities, cache invalidation, and uninstall cleanup without affecting native configuration.
+Verify precedence, no-key refusal, default keyless enablement, optional-key clearing and reset, registry-only providers, Azure headers, deployment and network Ollama hosts, callback order and failure cleanup, nested-validation rejection, candidate restoration, network isolation and blog switching, site REST and option write protection, nonce/capabilities, cache invalidation, and uninstall cleanup without affecting native configuration.
