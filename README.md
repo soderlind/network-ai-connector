@@ -6,6 +6,8 @@ Manage supported AI connections once for your WordPress multisite network. Netwo
 
 > **Important:** Network activation changes how managed providers get their credentials right away. A provider with no working network connection may stop working, even if a site already has a key. Existing site settings are kept, but are not used while network management is active. Set up your connections promptly after activation.
 
+<img src=".wordpress-org/screenshot-1.png" alt="Network AI Connector screenshot">
+
 ## What you need
 
 - WordPress multisite running WordPress 7.1 or later and PHP 8.2 or later.
