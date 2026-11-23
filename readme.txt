@@ -4,7 +4,7 @@ Tags: multisite, ai, connectors, network, api
 Requires at least: 7.1
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 0.1.3
+Stable tag: 1.0.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -72,6 +72,10 @@ Keys are stored in WordPress network options. The plugin does not add applicatio
 Uninstalling deletes the plugin's network keys and settings from all networks in the installation. Existing site settings are not deleted.
 
 == Changelog ==
+
+= 1.0.0 =
+
+* Production ready.
 
 = 0.1.3 =
 

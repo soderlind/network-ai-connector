@@ -78,3 +78,7 @@ node --test tests/site-notice.test.js
 ## License and credits
 
 GPL-2.0-or-later. The bundled provider and fallback icons are derived from the WordPress 7.1 core Connectors page (Copyright 2011-2026 WordPress contributors; GPL-2.0-or-later). A connector's registered logo takes precedence over the bundled icon.
+
+## AI contribution attribution
+
+For AI-assisted contributions, include an `Assisted-by: AGENT_NAME:MODEL_VERSION [TOOL1] [TOOL2]` tag. Specialized analysis tools are optional; omit basic development tools.
