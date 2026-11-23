@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0 - 2026-11-23
+
+- Production ready.
+
 ## 0.1.3 - 2026-11-06
 
 - Ollama works network-wide with its default host and no key, matching the site Connectors page.
