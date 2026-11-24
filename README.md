@@ -60,7 +60,7 @@ Managed AI connections are controlled by your network administrator. Their setti
 
 ## Credentials and network behavior
 
-Keys are stored in WordPress network options. This plugin does not add application-level encryption, so protect network administrator accounts, database access, and backups, and use HTTPS where possible. Saved keys are not displayed in the settings form.
+Keys are stored in WordPress network options. This plugin does not add application-level encryption, so protect network administrator accounts, database access, and backups, and use HTTPS where possible. Saved keys are not displayed in the settings form or site REST settings. Server-side PHP plugins can read network keys through connector options.
 
 Each network has its own connections. Deactivating Network AI Connector restores the usual site or hosting-provided configuration on subsequent requests but keeps the network settings. Uninstalling the plugin deletes its keys and settings from all networks; existing site settings are left intact.
 

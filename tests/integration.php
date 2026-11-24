@@ -460,7 +460,7 @@ try {
 	expect( 'ready' === get_option( $sentinel_option ), 'The internal status option remains readable by its provider' );
 	update_option( $sentinel_option, 'updated' );
 	expect( 'updated' === get_option( $sentinel_option ), 'The internal status option remains writable by its provider' );
-	expect( '' === get_option( $site_option ), 'Site option reads never expose either site or network credentials' );
+	expect( '' === get_option( $site_option ), 'An unconfigured managed option does not fall back to a site credential' );
 	expect( 'other-site-key' === get_option( $other_option ), 'Non-AI credential reads are unchanged' );
 
 	$authentication = $ai_registry->getProviderRequestAuthentication( 'nac-test' );
@@ -475,8 +475,23 @@ try {
 
 	update_network_option( $network_id, Plugin::OPTION, array( 'nac-test' => 'valid-network-one' ) );
 	expect( 'valid-network-one' === $authentication->getApiKey(), 'Network key overrides environment and constant keys' );
+	expect( 'valid-network-one' === get_option( $site_option ), 'Server-side connector option reads resolve the network key' );
+	expect( 'database' === _wp_connectors_get_api_key_source( $site_option ), 'Core detects the network credential without opening the Connectors page' );
+	$connector_registry->unregister( 'nac-test' );
+	$option_only_connector = $connector;
+	unset( $option_only_connector['authentication']['env_var_name'], $option_only_connector['authentication']['constant_name'] );
+	$connector_registry->register( 'nac-test', $option_only_connector );
 	_wp_connectors_pass_default_keys_to_ai_client();
-	expect( $ai_registry->getProviderRequestAuthentication( 'nac-test' ) instanceof Network_Authentication, 'Core credential initialization cannot replace network authentication' );
+	expect( ! $ai_registry->getProviderRequestAuthentication( 'nac-test' ) instanceof Network_Authentication, 'Core can replace authentication when it reads a network key from the connector option' );
+	foreach ( $GLOBALS['wp_filter']['init']->callbacks[20] as $callback ) {
+		if ( $callback['function'] === array( $plugin, 'enforce' ) ) {
+			$callback['function']();
+			break;
+		}
+	}
+	expect( $ai_registry->getProviderRequestAuthentication( 'nac-test' ) instanceof Network_Authentication, 'The init callback restores network authentication after core credential initialization' );
+	$connector_registry->unregister( 'nac-test' );
+	$connector_registry->register( 'nac-test', $connector );
 	$group_one = $plugin->cache_group( 'wp_ai_client' );
 	expect( ! str_contains( $group_one, 'valid-network-one' ), 'Cache namespace never includes plaintext credentials' );
 
@@ -485,6 +500,7 @@ try {
 	update_network_option( $network_id, Plugin::OPTION, array( 'nac-test' => 'valid-network-two' ) );
 	do_action( 'switch_blog', get_current_blog_id(), get_current_blog_id(), 'switch' );
 	expect( 'valid-network-two' === $authentication->getApiKey(), 'An existing authentication object follows the new network after a blog switch' );
+	expect( 'valid-network-two' === get_option( $site_option ), 'Connector option reads follow the current network after a blog switch' );
 	expect( $group_one !== $plugin->cache_group( 'wp_ai_client' ), 'Model caches are isolated between networks' );
 	expect( array( 'nac-test' => 'valid-network-one' ) === Plugin::keys( $networks[0] ), 'Changing the second network leaves the first untouched' );
 	$network_id       = $networks[0];

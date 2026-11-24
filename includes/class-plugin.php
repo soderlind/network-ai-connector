@@ -24,6 +24,7 @@ final class Plugin {
 	public function register(): void {
 		$this->register_provider_options();
 		add_action( 'init', array( $this, 'enforce' ), 19 );
+		add_action( 'init', array( $this, 'enforce' ), 20 );
 		add_action( 'init', array( $this, 'enforce' ), PHP_INT_MAX );
 		add_action( 'switch_blog', array( $this, 'enforce' ) );
 		add_filter( 'rest_pre_dispatch', array( $this, 'block_site_updates' ), 10, 3 );
@@ -211,10 +212,9 @@ final class Plugin {
 		foreach ( $this->connectors() as $id => $connector ) {
 			$option = $connector['authentication']['setting_name'];
 			if ( ! isset( $this->protected_options[ $option ] ) ) {
-				// Core and REST must never obtain a network secret through a site option.
 				add_filter(
 					"pre_option_{$option}",
-					static fn( mixed $value ): mixed => self::is_enforced() ? '' : $value,
+					static fn( mixed $value ): mixed => self::is_enforced() ? ( self::keys()[ $id ] ?? '' ) : $value,
 					PHP_INT_MAX
 				);
 				add_filter( "pre_update_option_{$option}", array( $this, 'preserve_site_option' ), PHP_INT_MAX, 2 );

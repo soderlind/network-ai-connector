@@ -13,7 +13,13 @@
 	],
 	"keywords": [
 		"wordpress",
-		"wp"
+		"wp",
+		"wordpress-plugin",
+		"multisite",
+		"network",
+		"ai",
+		"connectors",
+		"api-keys"
 	],
 	"support": {
 		"issues": "https://github.com/soderlind/network-ai-connector/issues"

@@ -4,7 +4,7 @@ Tags: multisite, ai, connectors, network, api
 Requires at least: 7.1
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,13 +65,18 @@ To stop using a saved Ollama key, select "Remove saved key and connect without o
 
 = How are keys stored? =
 
-Keys are stored in WordPress network options. The plugin does not add application-level encryption. Protect network administrator accounts, database access, and backups, and use HTTPS where possible.
+Keys are stored in WordPress network options. The plugin does not add application-level encryption. Protect network administrator accounts, database access, and backups, and use HTTPS where possible. Server-side PHP plugins can read network keys through connector options; site REST settings do not expose them.
 
 = What happens when I delete the plugin? =
 
 Uninstalling deletes the plugin's network keys and settings from all networks in the installation. Existing site settings are not deleted.
 
 == Changelog ==
+
+= 1.0.1 =
+
+* Fix detection of network-managed AI providers by WordPress, the AI plugin, and llms.md.
+* Allow server-side connector option reads of network credentials; site REST settings remain redacted.
 
 = 1.0.0 =
 
