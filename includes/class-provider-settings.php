@@ -11,7 +11,10 @@ final class Provider_Settings {
 	private static array $authentication_classes = array();
 
 	public static function remember_authentication( string $id, ?object $authentication ): void {
-		if ( $authentication instanceof ApiKeyRequestAuthentication && ! $authentication instanceof Network_Authentication ) {
+		// Core's generic replacement must not erase a provider's custom authentication.
+		if ( $authentication instanceof ApiKeyRequestAuthentication
+			&& ! $authentication instanceof Network_Authentication
+			&& ApiKeyRequestAuthentication::class !== get_class( $authentication ) ) {
 			self::$authentication_classes[ $id ] = get_class( $authentication );
 		}
 	}

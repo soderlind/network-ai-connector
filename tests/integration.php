@@ -40,10 +40,11 @@ require_once dirname( __DIR__ ) . '/includes/class-admin.php';
 
 final class Directory extends AbstractApiBasedModelMetadataDirectory {
 	public int $calls = 0;
+	public string $option_name = '';
 
 	protected function sendListModelsRequest(): array {
 		++$this->calls;
-		$key = $this->getRequestAuthentication()->getApiKey();
+		$key = '' === $this->option_name ? $this->getRequestAuthentication()->getApiKey() : (string) get_option( $this->option_name, '' );
 		if ( ! str_starts_with( $key, 'valid-' ) ) {
 			throw new \RuntimeException( 'Synthetic provider rejected the credential.' );
 		}
@@ -65,7 +66,7 @@ final class Provider implements ProviderInterface {
 		return $availability ??= new ListModelsApiBasedProviderAvailability( self::modelMetadataDirectory() );
 	}
 
-	public static function modelMetadataDirectory(): ModelMetadataDirectoryInterface {
+	public static function modelMetadataDirectory(): Directory {
 		static $directory;
 		return $directory ??= new Directory();
 	}
@@ -73,6 +74,12 @@ final class Provider implements ProviderInterface {
 
 final class Redirect extends \RuntimeException {}
 final class Died extends \RuntimeException {}
+
+final class OtherAuthentication extends \WordPress\AiClient\Providers\Http\DTO\ApiKeyRequestAuthentication {
+	public function authenticateRequest( Request $request ): Request {
+		return $request->withHeader( 'x-api-key', $this->getApiKey() );
+	}
+}
 
 final class AzureAuthentication extends \WordPress\AiClient\Providers\Http\DTO\ApiKeyRequestAuthentication {
 	public function authenticateRequest( Request $request ): Request {
@@ -460,7 +467,7 @@ try {
 	expect( 'ready' === get_option( $sentinel_option ), 'The internal status option remains readable by its provider' );
 	update_option( $sentinel_option, 'updated' );
 	expect( 'updated' === get_option( $sentinel_option ), 'The internal status option remains writable by its provider' );
-	expect( '' === get_option( $site_option ), 'Site option reads never expose either site or network credentials' );
+	expect( '' === get_option( $site_option ), 'An unconfigured managed option does not fall back to a site credential' );
 	expect( 'other-site-key' === get_option( $other_option ), 'Non-AI credential reads are unchanged' );
 
 	$authentication = $ai_registry->getProviderRequestAuthentication( 'nac-test' );
@@ -473,10 +480,29 @@ try {
 		expect( str_contains( $exception->getMessage(), 'no network credential' ), 'Missing network key refuses authentication despite site, constant, and environment keys' );
 	}
 
+	Provider::modelMetadataDirectory()->option_name = $site_option;
+	expect( true === $plugin->validate_key( 'nac-test', 'valid-first-key' ), 'An option-based provider can validate its first network key' );
+	expect( '' === get_option( $site_option ), 'Validation of a first key restores the unconfigured option' );
+	Provider::modelMetadataDirectory()->option_name = '';
 	update_network_option( $network_id, Plugin::OPTION, array( 'nac-test' => 'valid-network-one' ) );
 	expect( 'valid-network-one' === $authentication->getApiKey(), 'Network key overrides environment and constant keys' );
+	expect( 'valid-network-one' === get_option( $site_option ), 'Server-side connector option reads resolve the network key' );
+	expect( 'database' === _wp_connectors_get_api_key_source( $site_option ), 'Core detects the network credential without opening the Connectors page' );
+	$connector_registry->unregister( 'nac-test' );
+	$option_only_connector = $connector;
+	unset( $option_only_connector['authentication']['env_var_name'], $option_only_connector['authentication']['constant_name'] );
+	$connector_registry->register( 'nac-test', $option_only_connector );
 	_wp_connectors_pass_default_keys_to_ai_client();
-	expect( $ai_registry->getProviderRequestAuthentication( 'nac-test' ) instanceof Network_Authentication, 'Core credential initialization cannot replace network authentication' );
+	expect( ! $ai_registry->getProviderRequestAuthentication( 'nac-test' ) instanceof Network_Authentication, 'Core can replace authentication when it reads a network key from the connector option' );
+	foreach ( $GLOBALS['wp_filter']['init']->callbacks[20] as $callback ) {
+		if ( $callback['function'] === array( $plugin, 'enforce' ) ) {
+			$callback['function']();
+			break;
+		}
+	}
+	expect( $ai_registry->getProviderRequestAuthentication( 'nac-test' ) instanceof Network_Authentication, 'The init callback restores network authentication after core credential initialization' );
+	$connector_registry->unregister( 'nac-test' );
+	$connector_registry->register( 'nac-test', $connector );
 	$group_one = $plugin->cache_group( 'wp_ai_client' );
 	expect( ! str_contains( $group_one, 'valid-network-one' ), 'Cache namespace never includes plaintext credentials' );
 
@@ -485,6 +511,7 @@ try {
 	update_network_option( $network_id, Plugin::OPTION, array( 'nac-test' => 'valid-network-two' ) );
 	do_action( 'switch_blog', get_current_blog_id(), get_current_blog_id(), 'switch' );
 	expect( 'valid-network-two' === $authentication->getApiKey(), 'An existing authentication object follows the new network after a blog switch' );
+	expect( 'valid-network-two' === get_option( $site_option ), 'Connector option reads follow the current network after a blog switch' );
 	expect( $group_one !== $plugin->cache_group( 'wp_ai_client' ), 'Model caches are isolated between networks' );
 	expect( array( 'nac-test' => 'valid-network-one' ) === Plugin::keys( $networks[0] ), 'Changing the second network leaves the first untouched' );
 	$network_id       = $networks[0];
@@ -547,9 +574,12 @@ try {
 	$saved_key = 'valid-saved-secret-7391';
 	expect( 'saved' === $submit( array( 'operation' => 'save', 'api_key' => $saved_key ) ), 'Authorized nonced form validates and persists a network key' );
 	expect( $saved_key === Plugin::keys()['nac-test'], 'Successful save is persistent in network-option storage' );
+	Provider::modelMetadataDirectory()->option_name = $site_option;
+	expect( true === $plugin->validate_key( 'nac-test', 'valid-option-candidate' ), 'A provider reading its key option accepts a valid candidate' );
 	expect( 'validation_failed' === $submit( array( 'operation' => 'save', 'api_key' => 'invalid-key' ) ), 'Invalid form submission reports validation failure' );
 	expect( 'nac-test' === $redirected_provider, 'Failed submissions retain the provider identity for inline recovery' );
-	expect( $saved_key === Plugin::keys()['nac-test'], 'Failed form validation preserves the saved key' );
+	expect( $saved_key === Plugin::keys()['nac-test'] && $saved_key === get_option( $site_option ), 'Failed option-based validation preserves and restores the saved key' );
+	Provider::modelMetadataDirectory()->option_name = '';
 	expect( 'invalid_key' === $submit( array( 'operation' => 'save', 'api_key' => '' ) ), 'Blank replacement is an error, not implicit removal' );
 	expect( 'confirm_remove' === $submit( array( 'operation' => 'remove' ) ), 'Removal requires explicit confirmation' );
 
@@ -951,10 +981,23 @@ try {
 	expect( str_contains( $card( $site_only_html, 'azure-ai-foundry' ), '>Activate<' ) && ! str_contains( $card( $site_only_html, 'azure-ai-foundry' ), 'name="api_key"' ), 'A provider loaded only on the main site must be network-activated before network setup' );
 	expect( 'provider_inactive' === $submit( array( 'operation' => 'save', 'api_key' => 'valid-azure-key', 'configuration' => $azure_configuration ), true, 'azure-ai-foundry' ), 'A forged settings submission cannot bypass the network activation requirement' );
 	remove_filter( 'pre_site_option_active_sitewide_plugins', $site_only_activation, 20 );
+	$ai_registry->setProviderRequestAuthentication( 'nac-test', new OtherAuthentication( 'unused-native-key' ) );
+	$plugin->enforce();
+	$other_request = $ai_registry->getProviderRequestAuthentication( 'nac-test' )->authenticateRequest( new Request( HttpMethodEnum::get(), 'https://example.invalid/models' ) );
+	expect( $saved_key === $other_request->getHeaderAsString( 'x-api-key' ), 'A provider-specific authentication subclass is remembered' );
 	$ai_registry->setProviderRequestAuthentication( 'nac-test', new AzureAuthentication( 'unused-native-key' ) );
 	$plugin->enforce();
 	$custom_request = $ai_registry->getProviderRequestAuthentication( 'nac-test' )->authenticateRequest( new Request( HttpMethodEnum::get(), 'https://example.invalid/models' ) );
-	expect( $saved_key === $custom_request->getHeaderAsString( 'api-key' ), 'A standard provider native authentication subclass is preserved without a named integration' );
+	expect( $saved_key === $custom_request->getHeaderAsString( 'api-key' ), 'A newer provider-specific authentication subclass replaces the previous subclass' );
+	$connector_registry->unregister( 'nac-test' );
+	$connector_registry->register( 'nac-test', $option_only_connector );
+	_wp_connectors_pass_default_keys_to_ai_client();
+	expect( \WordPress\AiClient\Providers\Http\DTO\ApiKeyRequestAuthentication::class === get_class( $ai_registry->getProviderRequestAuthentication( 'nac-test' ) ), 'Core replaces the custom authentication with its generic class' );
+	$plugin->enforce();
+	$custom_request = $ai_registry->getProviderRequestAuthentication( 'nac-test' )->authenticateRequest( new Request( HttpMethodEnum::get(), 'https://example.invalid/models' ) );
+	expect( $saved_key === $custom_request->getHeaderAsString( 'api-key' ), 'Provider-specific authentication survives core key initialization and re-enforcement' );
+	$connector_registry->unregister( 'nac-test' );
+	$connector_registry->register( 'nac-test', $connector );
 	wp_register_script_module( 'azure-ai-foundry/connectors', 'https://example.invalid/module.js' );
 	wp_enqueue_script_module( 'azure-ai-foundry/connectors' );
 	expect( in_array( 'azure-ai-foundry/connectors', wp_script_modules()->get_queue(), true ), 'The custom site connector module is initially queued' );

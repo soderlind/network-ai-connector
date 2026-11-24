@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1 - 2026-11-24
+
+- Fix detection of network-managed AI providers by WordPress, the AI plugin, and llms.md.
+- Allow server-side connector option reads of network credentials; site REST settings remain redacted.
+
 ## 1.0.0 - 2026-11-23
 
 - Production ready.
