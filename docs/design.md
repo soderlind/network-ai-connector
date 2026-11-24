@@ -11,10 +11,10 @@ Azure's internal status marker remains excluded. Its real provider, endpoint, de
 ## Authority and data flow
 
 1. Core and provider plugins register connectors at initialization.
-2. Before providers initialize, the plugin overrides mapped options from network configuration. At initialization priorities 19, 20 and PHP_INT_MAX it binds network authentication, including after core and providers' own authentication callbacks.
+2. Before providers initialize, the plugin overrides mapped options from network configuration. At initialization priorities 19, 20 and PHP_INT_MAX it binds network authentication, including after core and providers' own authentication callbacks. A provider-specific authentication subclass remains in use if core replaces it with generic API-key authentication.
 3. Authentication reads credentials from the current site's network at request time. This also protects model instances retained across a blog switch.
 4. An unconfigured connection causes an explicit authentication exception before a managed authenticated request is sent. Required-key providers additionally require a nonempty key.
-5. Cache groups include network, credentials, settings, and candidate validation scope. The provider runtime applies candidate settings temporarily and restores the current configuration and network authentication after validation, including failures. Nested validations are rejected before they can alter that state.
+5. Cache groups include network, credentials, settings, and candidate validation scope. The provider runtime applies candidate settings temporarily; mapped and standard key option reads use the candidate key during validation. It restores the current configuration and network authentication afterward, including on failure. Nested validations are rejected before they can alter that state.
 
 Built-in runtime adapters run before provider-integration `apply` callbacks, preserving extension callback order and allowing an extension to override a built-in value. The Ollama adapter captures the deployment host when enforcement begins and restores or unsets it when enforcement ends. If a callback fails, the runtime attempts the other callbacks and surfaces a sanitized failure. Validation also attempts cache and authentication cleanup; any cleanup failure prevents the candidate from being saved. A failing integration remains responsible for restoring its own state.
 

@@ -170,10 +170,10 @@ final class Plugin {
 						if ( ! self::is_enforced() ) {
 							return $value;
 						}
-						$config = $this->configuration( $id );
 						if ( $option === $definition['key_option'] ) {
-							return $config['api_key'] ?? Plugin::keys()[ $id ] ?? '';
+							return $this->provider_key( $id );
 						}
+						$config = $this->configuration( $id );
 						$result = null;
 						foreach ( $definition['fields'] as $name => $field ) {
 							if ( $option !== $field['option'] ) {
@@ -202,6 +202,10 @@ final class Plugin {
 		return $this->runtime->configuration( $id );
 	}
 
+	private function provider_key( string $id ): mixed {
+		return $this->configuration( $id )['api_key'] ?? self::keys()[ $id ] ?? '';
+	}
+
 	public function apply_provider_configuration(): void {
 		$this->runtime->apply();
 	}
@@ -214,7 +218,7 @@ final class Plugin {
 			if ( ! isset( $this->protected_options[ $option ] ) ) {
 				add_filter(
 					"pre_option_{$option}",
-					static fn( mixed $value ): mixed => self::is_enforced() ? ( self::keys()[ $id ] ?? '' ) : $value,
+					fn( mixed $value ): mixed => self::is_enforced() ? $this->provider_key( $id ) : $value,
 					PHP_INT_MAX
 				);
 				add_filter( "pre_update_option_{$option}", array( $this, 'preserve_site_option' ), PHP_INT_MAX, 2 );
